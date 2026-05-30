@@ -21,13 +21,16 @@ export function HomeClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
 
-  const canAddProduct = draft.name.trim().length > 0 && products.length < MAX_PRODUCTS;
+  const canAddProduct =
+    draft.name.trim().length > 0 && (editingIndex !== null || products.length < MAX_PRODUCTS);
   const canCompare = products.length >= 2 && !loading;
   const showInitialAdd = products.length === 0 && !formOpen;
+  const canShowAddSlot = products.length < MAX_PRODUCTS && editingIndex === null;
 
   async function submit() {
     if (!canCompare) return;
@@ -64,8 +67,15 @@ export function HomeClient() {
       description: draft.description.trim(),
       files: draft.files
     };
-    setProducts((current) => [...current, nextProduct]);
+    if (editingIndex !== null) {
+      setProducts((current) =>
+        current.map((product, index) => (index === editingIndex ? nextProduct : product))
+      );
+    } else {
+      setProducts((current) => [...current, nextProduct]);
+    }
     setDraft(EMPTY_DRAFT);
+    setEditingIndex(null);
     setFormOpen(false);
     window.setTimeout(() => {
       cardsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -74,8 +84,11 @@ export function HomeClient() {
 
   function removeProduct(index: number) {
     setProducts((current) => current.filter((_, productIndex) => productIndex !== index));
-    setFormOpen(true);
-    window.setTimeout(() => nameInputRef.current?.focus(), 0);
+    if (editingIndex === index) {
+      setDraft(EMPTY_DRAFT);
+      setEditingIndex(null);
+      setFormOpen(false);
+    }
   }
 
   function addFiles(fileList: FileList | null) {
@@ -98,6 +111,7 @@ export function HomeClient() {
 
   function useSuggestion(suggestion: string) {
     if (products.length >= MAX_PRODUCTS) return;
+    setEditingIndex(null);
     setFormOpen(true);
     setDraft((current) => ({ ...current, name: suggestion }));
     window.setTimeout(() => nameInputRef.current?.focus(), 0);
@@ -110,6 +124,17 @@ export function HomeClient() {
 
   function openForm() {
     if (products.length >= MAX_PRODUCTS) return;
+    setEditingIndex(null);
+    setDraft(EMPTY_DRAFT);
+    setFormOpen(true);
+    window.setTimeout(() => nameInputRef.current?.focus(), 0);
+  }
+
+  function editProduct(index: number) {
+    const product = products[index];
+    if (!product) return;
+    setDraft(product);
+    setEditingIndex(index);
     setFormOpen(true);
     window.setTimeout(() => nameInputRef.current?.focus(), 0);
   }
@@ -133,6 +158,8 @@ export function HomeClient() {
                 <ProductCard
                   key={`${product.name}-${index}`}
                   product={product}
+                  isEditing={editingIndex === index}
+                  onEdit={() => editProduct(index)}
                   onRemove={() => removeProduct(index)}
                 />
               ))}
@@ -152,24 +179,14 @@ export function HomeClient() {
               </motion.button>
             )}
 
-            {products.length > 0 && products.length < MAX_PRODUCTS && (
-              <motion.button
-                type="button"
-                onClick={openForm}
-                initial={{ opacity: 0, x: 16 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.25, ease: "easeOut" }}
-                className="flex h-24 w-52 shrink-0 flex-col items-center justify-center rounded-xl border border-dashed border-zinc-700 text-zinc-500 transition-colors hover:border-zinc-500 hover:text-zinc-300"
-              >
-                <span className="text-2xl leading-none">+</span>
-                <span className="mt-1 text-sm">Add product</span>
-              </motion.button>
+            {canShowAddSlot && !showInitialAdd && (
+              <AddProductSlot isActive={formOpen && editingIndex === null} onClick={openForm} />
             )}
           </div>
         </div>
 
         <AnimatePresence>
-        {formOpen && products.length < MAX_PRODUCTS && (
+        {formOpen && (products.length < MAX_PRODUCTS || editingIndex !== null) && (
           <motion.form
             onSubmit={onFormSubmit}
             initial={{ opacity: 0, y: 16 }}
@@ -256,7 +273,7 @@ export function HomeClient() {
                 disabled={!canAddProduct || loading}
                 className="rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Add product →
+                {editingIndex === null ? "Add product →" : "Save product →"}
               </button>
             </div>
           </motion.form>
@@ -264,7 +281,7 @@ export function HomeClient() {
         </AnimatePresence>
 
         <AnimatePresence>
-        {formOpen && products.length < MAX_PRODUCTS && (
+        {formOpen && products.length < MAX_PRODUCTS && editingIndex === null && (
           <div className="mt-5 flex w-full max-w-2xl flex-wrap justify-center gap-2">
             {SUGGESTIONS.map((suggestion) => (
               <button
@@ -283,7 +300,7 @@ export function HomeClient() {
 
       </div>
 
-      <div className="app-bottom-bar fixed bottom-0 left-0 right-0 z-10 border-t border-zinc-800 bg-zinc-950/95 px-4 py-4 transition-[left] duration-300">
+      <div className="app-bottom-bar fixed bottom-0 left-0 right-0 z-10 bg-zinc-950/95 px-4 py-4 transition-[left] duration-300">
         <div className="mx-auto max-w-3xl space-y-2">
           <motion.button
             type="button"
@@ -301,7 +318,7 @@ export function HomeClient() {
             {loading && (
               <span className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full border-2 border-white/30 border-t-white animate-spin" />
             )}
-            {products.length < 2 ? "Add at least 2 products" : `Compare ${products.length} products →`}
+            {products.length < 2 ? "Add 2 products to analyze" : `Analyze ${products.length} products →`}
           </motion.button>
           {error && <p className="text-center text-sm text-red-400">{error}</p>}
         </div>
@@ -312,20 +329,35 @@ export function HomeClient() {
 
 function ProductCard({
   product,
+  isEditing,
+  onEdit,
   onRemove
 }: {
   product: Product;
+  isEditing: boolean;
+  onEdit: () => void;
   onRemove: () => void;
 }) {
   return (
     <motion.div
       layout
+      onDoubleClick={onEdit}
       initial={{ opacity: 0, y: 24, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -12, scale: 0.95 }}
       transition={{ type: "spring", stiffness: 380, damping: 28 }}
-      className="relative h-24 w-52 shrink-0 rounded-xl border border-zinc-700 bg-zinc-900 p-4"
+      className={`relative h-24 w-52 shrink-0 cursor-pointer rounded-xl border p-4 ${
+        isEditing
+          ? "border-green-400 bg-green-500/15 shadow-[0_0_0_1px_rgba(34,197,94,0.18),0_0_34px_rgba(34,197,94,0.2)]"
+          : "border-zinc-700 bg-zinc-900"
+      }`}
+      title="Double click to edit"
     >
+      {isEditing && (
+        <div className="absolute left-3 top-2 rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-green-300">
+          Editing
+        </div>
+      )}
       <button
         type="button"
         onClick={onRemove}
@@ -334,7 +366,7 @@ function ProductCard({
       >
         ×
       </button>
-      <div className="pr-7">
+      <div className={`pr-7 ${isEditing ? "pt-5" : ""}`}>
         <p className="truncate text-sm font-medium text-white">{product.name}</p>
         <p className="mt-1 overflow-hidden text-xs leading-5 text-zinc-400 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
           {product.description || "No note added"}
@@ -347,6 +379,31 @@ function ProductCard({
         )}
       </div>
     </motion.div>
+  );
+}
+
+function AddProductSlot({ isActive, onClick }: { isActive: boolean; onClick: () => void }) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      initial={{ opacity: 0, x: 16 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
+      className={`flex h-24 w-52 shrink-0 flex-col items-center justify-center rounded-xl border border-dashed transition-colors ${
+        isActive
+          ? "border-green-400/70 bg-green-500/5 text-transparent shadow-[0_0_0_1px_rgba(34,197,94,0.16),0_0_32px_rgba(34,197,94,0.18)]"
+          : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
+      }`}
+      aria-label={isActive ? "Product entry active" : "Add product"}
+    >
+      {!isActive && (
+        <>
+          <span className="text-2xl leading-none">+</span>
+          <span className="mt-1 text-sm">Add product</span>
+        </>
+      )}
+    </motion.button>
   );
 }
 

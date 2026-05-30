@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   RadarChart,
   Radar,
@@ -33,6 +34,51 @@ function pct(v: number) {
   return Math.round(v * 100);
 }
 
+function formatScore(v: number) {
+  return `${pct(v)}`;
+}
+
+function buildWhyNotReason({
+  productId,
+  productName,
+  winner,
+  result,
+  criteria
+}: {
+  productId: string;
+  productName: string;
+  winner: { productId: string; productName: string; score: number };
+  result: DecisionEngineResult;
+  criteria: Call1Output["criteria"];
+}) {
+  const elimination = result.eliminated.find((item) => item.productId === productId);
+  if (elimination) {
+    return `${productName} was filtered out because it failed the must-have requirement "${elimination.criterionName}".`;
+  }
+
+  const productScore = result.rankings.find((ranking) => ranking.productId === productId)?.score ?? 0;
+  const gap = Math.max(0, winner.score - productScore);
+  const winnerContrib = result.contributions[winner.productId] ?? {};
+  const productContrib = result.contributions[productId] ?? {};
+  const drivers = criteria
+    .filter((criterion) => criterion.type === "soft")
+    .map((criterion) => ({
+      name: criterion.name,
+      gap: (winnerContrib[criterion.id] ?? 0) - (productContrib[criterion.id] ?? 0)
+    }))
+    .filter((item) => item.gap > 0)
+    .sort((a, b) => b.gap - a.gap)
+    .slice(0, 2);
+
+  if (drivers.length === 0) {
+    return `${productName} is close, but ${winner.productName} has the stronger overall score by ${pct(gap)} points.`;
+  }
+
+  return `${productName} trails ${winner.productName} by ${pct(gap)} points, mainly on ${drivers
+    .map((driver) => driver.name)
+    .join(" and ")}.`;
+}
+
 // ── main page ────────────────────────────────────────────────────────────────
 
 export default function ResultsPage() {
@@ -48,6 +94,7 @@ export default function ResultsPage() {
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [reweightPending, setReweightPending] = useState(false);
+  const [expandedWhyNot, setExpandedWhyNot] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // store the full engine input for re-weighting
@@ -246,6 +293,8 @@ export default function ResultsPage() {
     );
   }
   const eliminated = result.rankings.filter((r) => r.eliminated);
+  const winner = ranked[0];
+  const alternatives = result.rankings.filter((ranking) => ranking.productId !== winner.productId);
 
   // Radar data
   const radarData = softCriteria.map((c) => {
@@ -276,6 +325,71 @@ export default function ResultsPage() {
             Export PDF
           </button>
         </div>
+
+        <section className="rounded-3xl border border-green-500/25 bg-green-500/10 p-6">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-green-300">
+                Best option
+              </p>
+              <h2 className="text-3xl font-bold text-white">{winner.productName}</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-300">
+                {winner.productName} has the strongest computed fit with a score of{" "}
+                <span className="font-semibold text-white">{formatScore(winner.score)}</span>.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-green-500/25 bg-green-500/10 px-5 py-4 text-center">
+              <div className="text-4xl font-bold text-white">{formatScore(winner.score)}</div>
+              <div className="mt-1 text-xs uppercase tracking-wide text-green-300">Composite</div>
+            </div>
+          </div>
+
+          {alternatives.length > 0 && (
+            <div className="mt-6 grid gap-3 md:grid-cols-2">
+              {alternatives.map((alternative) => {
+                const isOpen = expandedWhyNot === alternative.productId;
+                return (
+                  <button
+                    key={alternative.productId}
+                    type="button"
+                    onClick={() => setExpandedWhyNot(isOpen ? null : alternative.productId)}
+                    className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 text-left transition-colors hover:border-zinc-600"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-white">Why not {alternative.productName}?</p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          Score {formatScore(alternative.score)}
+                          {alternative.eliminated ? " · eliminated" : ""}
+                        </p>
+                      </div>
+                      <span className="text-xl text-zinc-500">{isOpen ? "−" : "+"}</span>
+                    </div>
+                    <AnimatePresence initial={false}>
+                      {isOpen && (
+                        <motion.p
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2, ease: "easeOut" }}
+                          className="mt-3 overflow-hidden text-sm leading-6 text-zinc-300"
+                        >
+                          {buildWhyNotReason({
+                            productId: alternative.productId,
+                            productName: alternative.productName,
+                            winner,
+                            result,
+                            criteria
+                          })}
+                        </motion.p>
+                      )}
+                    </AnimatePresence>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         {/* Leaderboard */}
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900 overflow-hidden">
