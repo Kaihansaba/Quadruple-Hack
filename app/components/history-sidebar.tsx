@@ -9,7 +9,15 @@ import {
   type ComparisonHistoryItem
 } from "@/lib/comparison-history";
 
-export function HistorySidebar() {
+export function HistorySidebar({
+  isOpen,
+  onClose,
+  onOpen
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onOpen: () => void;
+}) {
   const [items, setItems] = useState<ComparisonHistoryItem[]>([]);
 
   useEffect(() => {
@@ -28,43 +36,70 @@ export function HistorySidebar() {
   }, []);
 
   return (
-    <aside className="no-print fixed left-0 top-0 z-20 hidden h-screen w-72 border-r border-zinc-800 bg-zinc-950/95 px-3 py-4 lg:flex lg:flex-col">
-      <div className="mb-4 flex items-center justify-between px-2">
-        <Link href="/" className="text-sm font-semibold text-white">
-          Verdict
-        </Link>
-        {items.length > 0 && (
-          <button
-            type="button"
-            onClick={clearComparisonHistory}
-            className="text-xs text-zinc-500 transition-colors hover:text-zinc-300"
-          >
-            Clear
-          </button>
-        )}
-      </div>
-
-      <Link
-        href="/"
-        className="mb-4 rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-900"
+    <>
+      <button
+        type="button"
+        onClick={onOpen}
+        className={`no-print fixed left-3 top-3 z-30 hidden h-10 w-10 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950 text-zinc-300 transition-all hover:border-zinc-600 hover:text-white lg:flex ${
+          isOpen ? "pointer-events-none -translate-x-14 opacity-0" : "translate-x-0 opacity-100"
+        }`}
+        aria-label="Open history sidebar"
       >
-        New comparison
-      </Link>
+        ☰
+      </button>
 
-      <div className="mb-2 px-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
-        Previous comparisons
-      </div>
+      <aside
+        className={`no-print fixed left-0 top-0 z-20 hidden h-screen w-72 border-r border-zinc-800 bg-zinc-950/95 px-3 py-4 transition-transform duration-300 lg:flex lg:flex-col ${
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="mb-4 flex items-center justify-between px-2">
+          <Link href="/" className="text-sm font-semibold text-white">
+            Verdict
+          </Link>
+          <div className="flex items-center gap-3">
+            {items.length > 0 && (
+              <button
+                type="button"
+                onClick={clearComparisonHistory}
+                className="text-xs text-zinc-500 transition-colors hover:text-zinc-300"
+              >
+                Clear
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-900 hover:text-zinc-200"
+              aria-label="Close history sidebar"
+            >
+              ×
+            </button>
+          </div>
+        </div>
 
-      <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-        {items.length === 0 ? (
-          <p className="px-2 py-3 text-sm leading-relaxed text-zinc-500">
-            Completed and in-progress comparisons will appear here.
-          </p>
-        ) : (
-          items.map((item) => <HistoryRow key={item.id} item={item} />)
-        )}
-      </div>
-    </aside>
+        <Link
+          href="/"
+          className="mb-4 rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-900"
+        >
+          New comparison
+        </Link>
+
+        <div className="mb-2 px-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+          Previous comparisons
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+          {items.length === 0 ? (
+            <p className="px-2 py-3 text-sm leading-relaxed text-zinc-500">
+              Completed and in-progress comparisons will appear here.
+            </p>
+          ) : (
+            items.map((item) => <HistoryRow key={item.id} item={item} />)
+          )}
+        </div>
+      </aside>
+    </>
   );
 }
 

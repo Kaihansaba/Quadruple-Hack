@@ -37,7 +37,6 @@ async function chat(model: string, messages: Message[], json: boolean): Promise<
   }
 
   const data = await res.json();
-  console.log("[openrouter] data:", data);
   const content = data.choices?.[0]?.message?.content;
   if (typeof content !== "string") {
     throw new Error(`Unexpected response shape: ${JSON.stringify(data).slice(0, 200)}`);

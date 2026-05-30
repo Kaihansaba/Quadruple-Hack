@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
-import { HistorySidebar } from "./components/history-sidebar";
+import { Geist } from "next/font/google";
+import { AppShell } from "./components/app-shell";
 import "./globals.css";
+
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
 export const metadata: Metadata = {
   title: "Verdict",
@@ -9,10 +12,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={geist.variable}>
       <body>
-        <HistorySidebar />
-        <div className="lg:pl-72">{children}</div>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

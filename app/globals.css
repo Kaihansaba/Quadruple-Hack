@@ -16,7 +16,7 @@
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-family: var(--font-geist), ui-sans-serif, system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -44,5 +44,11 @@
     break-inside: avoid;
     border-color: #d4d4d8 !important;
     background: #ffffff !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .sidebar-open .app-bottom-bar {
+    left: 18rem;
   }
 }
