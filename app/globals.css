@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg: #0d0d0f;
+    --surface: #18181b;
+    --border: #27272a;
+    --text: #fafafa;
+    --muted: #71717a;
+    --accent: #22c55e;
+    --accent-dim: #16a34a;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}
