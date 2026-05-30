@@ -30,7 +30,6 @@ function normalizeCriterionId(raw: string, canonicalIds: string[]): string {
     if (score > bestScore) { bestScore = score; best = id; }
   }
 
-  console.warn(`[clarify] criterion_id mismatch: "${raw}" → "${best}"`);
   return best;
 }
 
@@ -69,8 +68,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       { role: "user", content: prompt }
     ]);
     call2 = JSON.parse(raw) as Call2Output;
-  } catch (err) {
-    console.error("[clarify] extraction error:", err);
+  } catch {
     return NextResponse.json({ error: "Extraction failed. Please try again." }, { status: 502 });
   }
 

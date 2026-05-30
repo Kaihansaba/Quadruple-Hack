@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { redistributeWeight } from "@/lib/engine/decision-engine";
 import { parseSessionData } from "@/lib/session-data";
+import { upsertComparisonHistory } from "@/lib/comparison-history";
 import type { DecisionEngineResult, Criterion } from "@/lib/engine/types";
 import type { ClarifyResponse, ReweightBody, ChatBody } from "@/lib/api-types";
 import type { Call1Output } from "@/lib/prompts";
@@ -67,6 +68,12 @@ export default function ResultsPage() {
         if (c.type === "soft") w[c.id] = c.weight ?? 0;
       }
       setWeights(w);
+      upsertComparisonHistory({
+        id,
+        title: parsed.products.map((product) => product.name).join(" vs "),
+        href: `/compare/${id}/results?data=${encodeURIComponent(JSON.stringify(parsed))}`,
+        status: "results"
+      });
     } catch {
       // ignore
     }
@@ -120,6 +127,10 @@ export default function ResultsPage() {
 
   function onSliderCommit() {
     reweight(weights);
+  }
+
+  function exportPdf() {
+    window.print();
   }
 
   // ── chat ────────────────────────────────────────────────────────────────────
@@ -222,7 +233,7 @@ export default function ResultsPage() {
             </div>
           )}
 
-          <div className="text-center">
+          <div className="no-print text-center">
             <a
               href="/"
               className="inline-block px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium transition-colors"
@@ -250,11 +261,20 @@ export default function ResultsPage() {
     <main className="min-h-screen px-4 py-10">
       <div className="max-w-5xl mx-auto space-y-8">
         {/* Header */}
-        <div>
-          <p className="text-zinc-500 text-sm mb-1">Step 3 of 3 — Results</p>
-          <h1 className="text-2xl font-bold text-white">
-            {products.map((p) => p.name).join(" vs ")}
-          </h1>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-zinc-500 text-sm mb-1">Step 3 of 3 — Results</p>
+            <h1 className="text-2xl font-bold text-white">
+              {products.map((p) => p.name).join(" vs ")}
+            </h1>
+          </div>
+          <button
+            type="button"
+            onClick={exportPdf}
+            className="no-print rounded-xl border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-900"
+          >
+            Export PDF
+          </button>
         </div>
 
         {/* Leaderboard */}
@@ -383,7 +403,7 @@ export default function ResultsPage() {
         </div>
 
         {/* Verdict */}
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+        <section className="no-print rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
           <h2 className="text-white font-semibold mb-3">Verdict</h2>
           <p className="text-zinc-300 leading-relaxed whitespace-pre-line">{verdict}</p>
 
@@ -430,7 +450,7 @@ export default function ResultsPage() {
         </section>
 
         {/* Chat */}
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900 overflow-hidden">
+        <section className="no-print rounded-2xl border border-zinc-800 bg-zinc-900 overflow-hidden">
           <div className="px-6 py-4 border-b border-zinc-800">
             <h2 className="text-white font-semibold">Refine</h2>
             <p className="text-zinc-500 text-xs mt-0.5">
@@ -476,6 +496,15 @@ export default function ResultsPage() {
             </button>
           </div>
         </section>
+        <div className="no-print flex justify-end">
+          <button
+            type="button"
+            onClick={exportPdf}
+            className="rounded-xl bg-green-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-green-500"
+          >
+            Export result as PDF
+          </button>
+        </div>
       </div>
     </main>
   );

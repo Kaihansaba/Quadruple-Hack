@@ -3,16 +3,8 @@ import { structuredCall } from "@/lib/openrouter";
 import { call1Prompt, type Call1Output } from "@/lib/prompts";
 import { sanitizeCall1OutputForProfile } from "@/lib/criteria-sanitizer";
 import { DEMO_PROFILE } from "@/lib/demo-profile";
+import { parseProducts } from "@/lib/product-parser";
 import type { StartResponse } from "@/lib/api-types";
-
-function parseProducts(query: string): string[] {
-  // Split on "vs", "versus", commas, or "and"
-  return query
-    .replace(/\bcompare\b/gi, "")
-    .split(/\s+vs\.?\s+|\s+versus\s+|,\s*|\s+and\s+/i)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
 
 export async function POST(req: NextRequest) {
   const { query } = await req.json();
@@ -25,7 +17,8 @@ export async function POST(req: NextRequest) {
 
   const profile = DEMO_PROFILE;
   const prompt = call1Prompt(products, profile);
-  let parsed: Call1Output;
+  // let parsed: Call1Output;
+  let parsed: any;
   try {
     const raw = await structuredCall([
       {
@@ -36,8 +29,7 @@ export async function POST(req: NextRequest) {
       { role: "user", content: prompt }
     ]);
     parsed = sanitizeCall1OutputForProfile(JSON.parse(raw) as Call1Output, profile);
-  } catch (err) {
-    console.error("[start] parse error:", err);
+  } catch {
     return NextResponse.json({ error: "LLM returned malformed JSON. Please try again." }, { status: 502 });
   }
 

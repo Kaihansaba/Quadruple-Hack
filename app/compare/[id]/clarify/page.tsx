@@ -5,6 +5,7 @@ import { useRouter, useParams, useSearchParams } from "next/navigation";
 import type { StartResponse } from "@/lib/api-types";
 import type { ClarifyBody } from "@/lib/api-types";
 import { parseSessionData } from "@/lib/session-data";
+import { upsertComparisonHistory } from "@/lib/comparison-history";
 
 type Answer = {
   questionId: string;
@@ -78,9 +79,14 @@ export default function ClarifyPage() {
       });
       if (!res.ok) throw new Error(await res.text());
       const result = await res.json();
-      router.push(
-        `/compare/${id}/results?data=${encodeURIComponent(JSON.stringify(result))}`
-      );
+      const href = `/compare/${id}/results?data=${encodeURIComponent(JSON.stringify(result))}`;
+      upsertComparisonHistory({
+        id,
+        title: data.products.map((product) => product.name).join(" vs "),
+        href,
+        status: "results"
+      });
+      router.push(href);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setLoading(false);

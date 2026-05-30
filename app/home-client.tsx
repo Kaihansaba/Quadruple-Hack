@@ -2,13 +2,12 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { upsertComparisonHistory } from "@/lib/comparison-history";
 import type { StartResponse } from "@/lib/api-types";
 
 const SUGGESTIONS = [
-  "Compare CrowdStrike Falcon vs SentinelOne Singularity",
-  "Compare Salesforce vs HubSpot vs Pipedrive",
-  "Compare AWS vs Azure vs Google Cloud",
-  "Compare Okta vs Microsoft Entra ID"
+  "Compare Salesforce vs HubSpot",
+  "Compare AWS vs Azure"
 ];
 
 const PROFILE_BADGE = "Meridian Software";
@@ -34,7 +33,14 @@ export function HomeClient() {
       });
       if (!res.ok) throw new Error(await res.text());
       const data: StartResponse = await res.json();
-      router.push(`/compare/${data.comparisonId}/clarify?data=${encodeURIComponent(JSON.stringify(data))}`);
+      const href = `/compare/${data.comparisonId}/clarify?data=${encodeURIComponent(JSON.stringify(data))}`;
+      upsertComparisonHistory({
+        id: data.comparisonId,
+        title: data.products.map((product) => product.name).join(" vs "),
+        href,
+        status: "clarify"
+      });
+      router.push(href);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setLoading(false);
@@ -60,12 +66,9 @@ export function HomeClient() {
         Profile loaded: <strong className="font-semibold">{PROFILE_BADGE}</strong>
       </div>
 
-      <h1 className="text-4xl sm:text-5xl font-bold text-white text-center max-w-2xl leading-tight mb-3">
-        What are you deciding today?
+      <h1 className="text-4xl sm:text-5xl font-bold text-white text-center max-w-2xl leading-tight mb-8">
+        Find the best option.
       </h1>
-      <p className="text-zinc-400 text-base sm:text-lg text-center max-w-xl mb-10">
-        Enter two or more products to compare. Verdict gathers live evidence, scores them deterministically, and gives you a defensible recommendation.
-      </p>
 
       <form onSubmit={onSubmit} className="w-full max-w-2xl">
         <div className="relative rounded-2xl border border-zinc-700 bg-zinc-900 focus-within:border-zinc-500 transition-colors">

@@ -24,3 +24,25 @@
     box-sizing: border-box;
   }
 }
+
+@media print {
+  body {
+    background: #ffffff;
+    color: #111111;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  main {
+    min-height: auto !important;
+    padding: 0 !important;
+  }
+
+  section {
+    break-inside: avoid;
+    border-color: #d4d4d8 !important;
+    background: #ffffff !important;
+  }
+}
