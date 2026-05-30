@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { webExtractCall, narrateCall } from "@/lib/openrouter";
 import { call2Prompt, call3Prompt, type Call1Output, type Call2Output } from "@/lib/prompts";
 import { DEMO_PROFILE } from "@/lib/demo-profile";
+import { sanitizeCall1OutputForProfile } from "@/lib/criteria-sanitizer";
 import { runDecisionEngine } from "@/lib/engine/decision-engine";
 import type { DecisionEngineInput, ExtractedValue, Criterion } from "@/lib/engine/types";
 import type { ClarifyBody, ClarifyResponse } from "@/lib/api-types";
@@ -41,8 +42,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     criteria: Call1Output["criteria"];
   } = await req.json();
 
-  const { products, criteria, answers } = body;
+  const { products, answers } = body;
   const profile = DEMO_PROFILE;
+  const criteria = sanitizeCall1OutputForProfile(
+    { criteria: body.criteria, questions: [] },
+    profile
+  ).criteria;
   const canonicalIds = criteria.map((c) => c.id);
 
   // Call 2: extraction + web search + weight proposal

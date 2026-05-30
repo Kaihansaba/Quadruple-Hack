@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import type { StartResponse } from "@/lib/api-types";
 import type { ClarifyBody } from "@/lib/api-types";
+import { parseSessionData } from "@/lib/session-data";
 
 type Answer = {
   questionId: string;
@@ -26,7 +27,7 @@ export default function ClarifyPage() {
     const raw = searchParams.get("data");
     if (raw) {
       try {
-        setData(JSON.parse(decodeURIComponent(raw)) as StartResponse);
+        setData(parseSessionData<StartResponse>(raw));
       } catch {
         setError("Invalid session data.");
       }

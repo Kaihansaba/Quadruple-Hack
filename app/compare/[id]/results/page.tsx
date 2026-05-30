@@ -11,6 +11,7 @@ import {
   Tooltip
 } from "recharts";
 import { redistributeWeight } from "@/lib/engine/decision-engine";
+import { parseSessionData } from "@/lib/session-data";
 import type { DecisionEngineResult, Criterion } from "@/lib/engine/types";
 import type { ClarifyResponse, ReweightBody, ChatBody } from "@/lib/api-types";
 import type { Call1Output } from "@/lib/prompts";
@@ -55,7 +56,7 @@ export default function ResultsPage() {
     const raw = searchParams.get("data");
     if (!raw) return;
     try {
-      const parsed: ClarifyResponse = JSON.parse(decodeURIComponent(raw));
+      const parsed = parseSessionData<ClarifyResponse>(raw);
       engineInputRef.current = parsed;
       setResult(parsed.result);
       setCriteria(parsed.criteria);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { structuredCall } from "@/lib/openrouter";
 import { call1Prompt, type Call1Output } from "@/lib/prompts";
+import { sanitizeCall1OutputForProfile } from "@/lib/criteria-sanitizer";
 import { DEMO_PROFILE } from "@/lib/demo-profile";
 import type { StartResponse } from "@/lib/api-types";
 
@@ -24,7 +25,6 @@ export async function POST(req: NextRequest) {
 
   const profile = DEMO_PROFILE;
   const prompt = call1Prompt(products, profile);
-
   let parsed: Call1Output;
   try {
     const raw = await structuredCall([
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       },
       { role: "user", content: prompt }
     ]);
-    parsed = JSON.parse(raw) as Call1Output;
+    parsed = sanitizeCall1OutputForProfile(JSON.parse(raw) as Call1Output, profile);
   } catch (err) {
     console.error("[start] parse error:", err);
     return NextResponse.json({ error: "LLM returned malformed JSON. Please try again." }, { status: 502 });

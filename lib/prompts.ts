@@ -55,7 +55,9 @@ export function call1Prompt(products: string[], profile: CompanyProfile): string
     instructions: [
       "Return JSON with keys: criteria (array), questions (array).",
       "criteria: 3-6 items. Each has id (slug), name, unit, direction (higher|lower), type (soft|hard), weight (0-1 float for soft, null for hard). Weights for soft criteria must sum to 1.",
-      "Hard criteria are binary dealbreakers (e.g. compliance certs). Soft criteria are scored.",
+      "Default to soft criteria. Only create hard criteria for explicit must-have requirements from company_profile.compliance_reqs.",
+      "If company_profile.compliance_reqs is empty, do not create or ask about HIPAA, SOC 2, GDPR, ISO, PCI, certifications, audits, attestations, regulatory compliance, or other compliance gates.",
+      "Hard criteria are binary dealbreakers only when the buyer explicitly requires them. Soft criteria are scored.",
       "questions: 4-8 items covering priorities (drives weights), dealbreakers (hard requirements), and category-specific clarifications.",
       "Each question has id, category (priorities|dealbreakers|clarification), question (string), suggested_answers (array of {label, from_profile}).",
       "Mark from_profile:true for answers pre-matched by the company profile.",
@@ -92,6 +94,7 @@ export function call2Prompt(
       `CRITICAL: criterion_id in extracted_values MUST be copied EXACTLY from valid_criterion_ids. Do NOT invent or rename criterion IDs. Valid IDs are: ${criteria.map((c) => c.id).join(", ")}.`,
       "extracted_values: one entry per (product, criterion) pair. Fields: product_name (exact match to products list), criterion_id (exact match to valid_criterion_ids), raw_value (string), source_url, source_type (spec|expert_review|user_review|vendor_claim), confidence (0-1).",
       "For score_0_10 criteria, assign a score 0-10 based on evidence. For boolean criteria, raw_value must be 'true' or 'false'.",
+      "For hard criteria, use raw_value 'false' only when evidence clearly says the product fails the requirement. If evidence is unavailable or ambiguous, omit that entry rather than guessing false.",
       "proposed_weights: maps each soft criterion_id to a float; must sum to 1.0. Hard criteria (type=hard) must NOT appear in proposed_weights.",
       "If a product has no evidence for a criterion, omit that entry (it will be imputed).",
       "Use real URLs from your web search as source_url."
