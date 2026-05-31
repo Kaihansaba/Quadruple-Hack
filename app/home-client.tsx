@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { upsertComparisonHistory } from "@/lib/comparison-history";
@@ -9,10 +9,27 @@ import type { StartResponse } from "@/lib/api-types";
 type Product = { name: string; description: string; files: File[] };
 
 const SUGGESTIONS = ["Salesforce", "HubSpot"];
-const PROFILE_BADGE = "Meridian Software";
 const MAX_PRODUCTS = 4;
+const PROFILE_STORAGE_KEY = "verdict:profile-edits:v1";
 
 const EMPTY_DRAFT: Product = { name: "", description: "", files: [] };
+
+function getGreeting(firstName: string | null) {
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  return firstName ? `${greeting} ${firstName}` : greeting;
+}
+
+function readProfileFirstName() {
+  try {
+    const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { contactName?: string };
+    return parsed.contactName?.trim().split(/\s+/)[0] || null;
+  } catch {
+    return null;
+  }
+}
 
 export function HomeClient() {
   const router = useRouter();
@@ -22,6 +39,7 @@ export function HomeClient() {
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [firstName, setFirstName] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
@@ -31,6 +49,11 @@ export function HomeClient() {
   const canCompare = products.length >= 2 && !loading;
   const showInitialAdd = products.length === 0 && !formOpen;
   const canShowAddSlot = products.length < MAX_PRODUCTS && editingIndex === null;
+  const greeting = getGreeting(firstName);
+
+  useEffect(() => {
+    setFirstName(readProfileFirstName());
+  }, []);
 
   async function submit() {
     if (!canCompare) return;
@@ -150,7 +173,7 @@ export function HomeClient() {
       <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center">
         <div className="mb-9 flex items-center gap-2 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-sm text-green-400">
           <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
-          Profile loaded: <strong className="font-semibold">{PROFILE_BADGE}</strong>
+          <strong className="font-semibold">{greeting}</strong>
         </div>
 
         <h1
