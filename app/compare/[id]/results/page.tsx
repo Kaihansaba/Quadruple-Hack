@@ -16,6 +16,7 @@ import { parseSessionData, readSessionData, saveSessionData } from "@/lib/sessio
 import { upsertComparisonHistory } from "@/lib/comparison-history";
 import { DecisionMemo, type MemoData } from "@/app/components/DecisionMemo";
 import { DEMO_PROFILE } from "@/lib/demo-profile";
+import ProductLogo from "@/components/ui/product-logo";
 import type { DecisionEngineInput, DecisionEngineResult, Criterion } from "@/lib/engine/types";
 import type {
   ChatBody,
@@ -703,7 +704,10 @@ export default function ResultsPage() {
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-teal-300">
                 Recommendation
               </p>
-              <h2 className="text-3xl font-bold text-white">{winner.productName}</h2>
+              <div className="flex items-center gap-3">
+                <ProductLogo name={winner.productName} size={44} />
+                <h2 className="text-3xl font-bold text-white">{winner.productName}</h2>
+              </div>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-300">
                 {recommendationDescription}
               </p>
@@ -741,6 +745,7 @@ export default function ResultsPage() {
                     >
                       {i + 1}
                     </span>
+                    <ProductLogo name={r.productName} size={28} />
                     <span className="text-white font-medium flex-1">{r.productName}</span>
                     {i === 0 ? (
                       <span className="ml-auto mr-4 text-5xl font-bold tracking-tight text-white">
@@ -877,8 +882,11 @@ export default function ResultsPage() {
                   <tr className="border-b border-zinc-800">
                     <th className="px-4 py-2.5 text-left text-zinc-500 font-normal">Criterion</th>
                     {ranked.map((r, i) => (
-                      <th key={r.productId} className="px-4 py-2.5 text-center font-medium" style={{ color: COLORS[i] }}>
-                        {r.productName.split(" ")[0]}
+                      <th key={r.productId} className="px-4 py-2.5 font-medium" style={{ color: COLORS[i] }}>
+                        <span className="flex flex-col items-center gap-1.5">
+                          <ProductLogo name={r.productName} size={24} />
+                          {r.productName.split(" ")[0]}
+                        </span>
                       </th>
                     ))}
                   </tr>

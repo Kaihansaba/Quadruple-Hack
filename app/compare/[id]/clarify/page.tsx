@@ -8,6 +8,7 @@ import type { ClarifyBody } from "@/lib/api-types";
 import { parseSessionData, readSessionData, saveSessionData } from "@/lib/session-data";
 import { upsertComparisonHistory } from "@/lib/comparison-history";
 import OnboardCard from "@/components/ui/onboard-card";
+import ProductLogo from "@/components/ui/product-logo";
 
 type Answer = {
   questionId: string;
@@ -184,11 +185,9 @@ export default function ClarifyPage() {
             {data.products.map((product, index) => (
               <div
                 key={`${product.name}-${index}`}
-                className="flex h-10 shrink-0 items-center rounded-full border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-200"
+                className="flex h-10 shrink-0 items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 pl-1.5 pr-3 text-sm text-zinc-200"
               >
-                <span className="mr-2 flex h-5 w-5 items-center justify-center rounded-full bg-zinc-800 text-xs text-zinc-400">
-                  {index + 1}
-                </span>
+                <ProductLogo name={product.name} size={28} />
                 <span className="max-w-36 truncate">{product.name}</span>
               </div>
             ))}

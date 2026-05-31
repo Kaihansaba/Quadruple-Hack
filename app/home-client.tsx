@@ -9,6 +9,7 @@ import { saveSessionData } from "@/lib/session-data";
 import { formatIncomparableMessage } from "@/lib/start-response";
 import BoxLoader from "@/components/ui/box-loader";
 import LightRays from "@/components/ui/light-rays";
+import ProductLogo from "@/components/ui/product-logo";
 
 type AttachmentStatus = "parsing" | "parsed" | "no_text" | "error";
 
@@ -665,7 +666,10 @@ function ProductCard({
         ×
       </button>
       <div className={`pr-7 ${isEditing ? "pt-5" : ""}`}>
-        <p className="truncate text-sm font-medium text-white">{product.name}</p>
+        <div className="mb-1 flex items-center gap-2">
+          <ProductLogo name={product.name} size={24} />
+          <p className="truncate text-sm font-medium text-white">{product.name}</p>
+        </div>
         <p className="mt-1 overflow-hidden text-xs leading-5 text-zinc-400 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
           {product.description || "No note added"}
         </p>
