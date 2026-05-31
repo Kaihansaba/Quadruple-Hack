@@ -18,6 +18,7 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import { DecisionMemo, type MemoData } from "@/app/components/DecisionMemo";
 import { DEMO_PROFILE } from "@/lib/demo-profile";
 import ProductLogo from "@/components/ui/product-logo";
+import ScoreGauge from "@/components/ui/score-gauge";
 import type { DecisionEngineInput, DecisionEngineResult, Criterion } from "@/lib/engine/types";
 import type {
   ChatBody,
@@ -720,9 +721,8 @@ export default function ResultsPage() {
                 </p>
               )}
             </div>
-            <div className="rounded-2xl border border-teal-500/25 bg-teal-500/10 px-5 py-4 text-center">
-              <div className="text-4xl font-bold text-white">{formatScore(winner.score)}</div>
-              <div className="mt-1 text-xs uppercase tracking-wide text-teal-300 light:text-teal-700">Match</div>
+            <div className="flex shrink-0 items-center justify-center sm:px-2">
+              <ScoreGauge value={pct(winner.score)} label="Match" size={170} />
             </div>
           </div>
         </section>
