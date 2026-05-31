@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion, AnimatePresence, animate } from "framer-motion";
 import {
   RadarChart,
   Radar,
@@ -14,13 +14,24 @@ import {
 import { redistributeWeight } from "@/lib/engine/decision-engine";
 import { parseSessionData } from "@/lib/session-data";
 import { upsertComparisonHistory } from "@/lib/comparison-history";
+import { DecisionMemo, type MemoData } from "@/app/components/DecisionMemo";
+import { DEMO_PROFILE } from "@/lib/demo-profile";
 import type { DecisionEngineResult, Criterion } from "@/lib/engine/types";
-import type { ClarifyResponse, ReweightBody, ChatBody } from "@/lib/api-types";
+import type {
+  ChatBody,
+  ClarifyResponse,
+  ReweightBody,
+  RobustnessBody,
+  RobustnessResponse
+} from "@/lib/api-types";
 import type { Call1Output } from "@/lib/prompts";
 
 type Product = { id: string; name: string };
 
 const COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#a855f7", "#ef4444"];
+const MIN_ROBUSTNESS_BAND = 0.15;
+const MAX_ROBUSTNESS_BAND = 0.6;
+const DEFAULT_PRIORITY_FIRMNESS = 44;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +47,17 @@ function pct(v: number) {
 
 function formatScore(v: number) {
   return `${pct(v)}`;
+}
+
+function formatRank(rank: number) {
+  if (rank === 1) return "#1";
+  if (rank === 2) return "#2";
+  if (rank === 3) return "#3";
+  return `#${rank}`;
+}
+
+function firmnessToBand(firmness: number) {
+  return MAX_ROBUSTNESS_BAND - (firmness / 100) * (MAX_ROBUSTNESS_BAND - MIN_ROBUSTNESS_BAND);
 }
 
 function buildWhyNotReason({
@@ -95,7 +117,13 @@ export default function ResultsPage() {
   const [chatLoading, setChatLoading] = useState(false);
   const [reweightPending, setReweightPending] = useState(false);
   const [expandedWhyNot, setExpandedWhyNot] = useState<string | null>(null);
+  const [displayScores, setDisplayScores] = useState<Record<string, number>>({});
+  const [robustness, setRobustness] = useState<RobustnessResponse | null>(null);
+  const [priorityFirmness, setPriorityFirmness] = useState(DEFAULT_PRIORITY_FIRMNESS);
+  const [robustnessPending, setRobustnessPending] = useState(false);
+  const [printMemo, setPrintMemo] = useState<MemoData | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const skipInitialRobustnessRef = useRef(true);
 
   // store the full engine input for re-weighting
   const engineInputRef = useRef<ClarifyResponse | null>(null);
@@ -110,6 +138,7 @@ export default function ResultsPage() {
       setCriteria(parsed.criteria);
       setProducts(parsed.products);
       setVerdict(parsed.verdict);
+      setRobustness(parsed.robustness ?? null);
       const w: Record<string, number> = {};
       for (const c of parsed.criteria) {
         if (c.type === "soft") w[c.id] = c.weight ?? 0;
@@ -129,6 +158,63 @@ export default function ResultsPage() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (!printMemo) return;
+    const frame = window.requestAnimationFrame(() => window.print());
+    return () => window.cancelAnimationFrame(frame);
+  }, [printMemo]);
+
+  useEffect(() => {
+    if (!result) return;
+    const controls = result.rankings
+      .filter((r) => !r.eliminated)
+      .map((r) =>
+        animate(0, Math.round(r.score * 100), {
+          duration: 0.9,
+          ease: [0.16, 1, 0.3, 1],
+          onUpdate: (v) =>
+            setDisplayScores((prev) => ({ ...prev, [r.productId]: Math.round(v) }))
+        })
+      );
+    return () => controls.forEach((c) => c.stop());
+  }, [result]);
+
+  useEffect(() => {
+    if (skipInitialRobustnessRef.current) {
+      skipInitialRobustnessRef.current = false;
+      return;
+    }
+
+    const engineInput = engineInputRef.current?.engineInput;
+    if (!engineInput) return;
+
+    const timeout = window.setTimeout(async () => {
+      setRobustnessPending(true);
+      const body: RobustnessBody = {
+        engineInput,
+        weights,
+        band: firmnessToBand(priorityFirmness)
+      };
+
+      try {
+        const res = await fetch(`/api/comparisons/${id}/robustness`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        setRobustness(data.robustness ?? null);
+      } catch {
+        // Keep the current robustness readout if recomputing fails.
+      } finally {
+        setRobustnessPending(false);
+      }
+    }, 350);
+
+    return () => window.clearTimeout(timeout);
+  }, [id, priorityFirmness, weights]);
 
   // ── reweight ────────────────────────────────────────────────────────────────
 
@@ -158,6 +244,7 @@ export default function ResultsPage() {
         const data = await res.json();
         setResult(data.result);
         setCriteria(data.criteria);
+        setRobustness(data.robustness ?? null);
       } catch {
         // silent
       } finally {
@@ -176,8 +263,127 @@ export default function ResultsPage() {
     reweight(weights);
   }
 
+  function buildMemoData(): MemoData {
+    if (!result || products.length === 0 || criteria.length === 0) {
+      throw new Error("Missing result data for decision memo.");
+    }
+
+    const activeRankings = result.rankings.filter((ranking) => !ranking.eliminated);
+    const selectedRanking = activeRankings[0];
+    if (!selectedRanking) {
+      throw new Error("Decision memo requires a recommended vendor.");
+    }
+
+    const runnerUpRanking = activeRankings[1];
+    const memoVendors = products.map((product) => {
+      const ranking = result.rankings.find((item) => item.productId === product.id);
+      return {
+        id: product.id,
+        name: product.name,
+        estimatedCost: "Not finalized",
+        compositeScore: ranking?.score ?? 0
+      };
+    });
+    const memoCriteria = criteria.map((criterion) => ({
+      id: criterion.id,
+      name: criterion.name,
+      weight: criterion.type === "soft" ? criterion.weight ?? 0 : 0,
+      direction: criterion.direction,
+      rationale:
+        criterion.type === "hard"
+          ? "Treated as a mandatory requirement before weighted scoring."
+          : `Weighted at ${pct(criterion.weight ?? 0)}% based on the buyer's stated priorities.`,
+      fromProfile: DEMO_PROFILE.default_weights[criterion.id] !== undefined
+    }));
+    const memoScores = result.cells
+      .filter((cell) => products.some((product) => product.id === cell.productId))
+      .filter((cell) => criteria.some((criterion) => criterion.id === cell.criterionId))
+      .map((cell) => ({
+        vendorId: cell.productId,
+        criterionId: cell.criterionId,
+        normalizedScore: cell.normalizedValue ?? 0,
+        sourcesDisagree: cell.sourcesDisagree
+      }));
+    const alternativeReasons = result.rankings
+      .filter((ranking) => ranking.productId !== selectedRanking.productId)
+      .map((ranking) => ({
+        vendorId: ranking.productId,
+        reason: buildWhyNotReason({
+          productId: ranking.productId,
+          productName: ranking.productName,
+          winner: selectedRanking,
+          result,
+          criteria
+        })
+      }));
+    const memoSources = result.cells
+      .filter((cell) => cell.sourceUrl)
+      .map((cell, index) => {
+        const vendor = products.find((product) => product.id === cell.productId);
+        const criterion = criteria.find((item) => item.id === cell.criterionId);
+        return {
+          id: `${cell.productId}-${cell.criterionId}-${index}`,
+          label: `${vendor?.name ?? cell.productId} evidence for ${criterion?.name ?? cell.criterionId}`,
+          url: cell.sourceUrl ?? "",
+          sourceType: cell.sourceType ?? "vendor_claim",
+          confidence: cell.confidence,
+          relatedVendorId: cell.productId,
+          relatedCriterionId: cell.criterionId,
+          sourcesDisagree: cell.sourcesDisagree
+        };
+      });
+    const lowConfidenceCell = result.cells
+      .filter((cell) => !cell.missing)
+      .sort((a, b) => a.confidence - b.confidence)[0];
+    const lowConfidenceVendor = lowConfidenceCell
+      ? products.find((product) => product.id === lowConfidenceCell.productId)
+      : null;
+    const lowConfidenceCriterion = lowConfidenceCell
+      ? criteria.find((criterion) => criterion.id === lowConfidenceCell.criterionId)
+      : null;
+
+    return {
+      title: "Vendor Selection Decision Memo",
+      to: `${DEMO_PROFILE.name} leadership team`,
+      from: "Procurement evaluation team",
+      date: new Date().toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "long",
+        day: "numeric"
+      }),
+      subject: `${products.map((product) => product.name).join(" vs ")} selection`,
+      decisionStatus: "Recommended for Approval",
+      preparedBy: DEMO_PROFILE.name,
+      totalEstimatedCost: "Pending final vendor quote",
+      selectedVendorId: selectedRanking.productId,
+      criteria: memoCriteria,
+      vendors: memoVendors,
+      scores: memoScores,
+      contributions: result.contributions,
+      robustness: {
+        winFrequency: robustness?.winFrequency ?? { [selectedRanking.productId]: 1 },
+        worstCaseRank: robustness?.worstCaseRank ?? { [selectedRanking.productId]: 1 },
+        flipThreshold: robustness?.flipThreshold ?? null,
+        flipCriterionName: result.sensitivity?.criterionName ?? null,
+        runnerUpVendorId: result.sensitivity?.overtakingProductId ?? runnerUpRanking?.productId ?? null
+      },
+      alternativeReasons,
+      riskSummary:
+        lowConfidenceCell && lowConfidenceVendor && lowConfidenceCriterion
+          ? `${lowConfidenceVendor.name} has the lowest-confidence evidence on ${lowConfidenceCriterion.name}; procurement should validate this point before final approval.`
+          : "No material low-confidence source risk was identified in the available evidence.",
+      sources: memoSources
+    };
+  }
+
   function exportPdf() {
-    window.print();
+    try {
+      setPrintMemo(buildMemoData());
+    } catch (error) {
+      console.warn("Falling back to screen print because decision memo data could not be built.", error);
+      setPrintMemo(null);
+      window.setTimeout(() => window.print(), 0);
+    }
   }
 
   // ── chat ────────────────────────────────────────────────────────────────────
@@ -295,6 +501,23 @@ export default function ResultsPage() {
   const eliminated = result.rankings.filter((r) => r.eliminated);
   const winner = ranked[0];
   const alternatives = result.rankings.filter((ranking) => ranking.productId !== winner.productId);
+  const runnerUp = ranked[1];
+  const winnerFrequency =
+    robustness?.baseWinner === winner.productId ? robustness.winFrequency?.[robustness.baseWinner] : undefined;
+  const winnerConfidenceText =
+    typeof winnerFrequency === "number"
+      ? `Wins in ${pct(winnerFrequency)}% of reasonable priority scenarios.`
+      : null;
+  const winnerWorstCaseRank = robustness?.worstCaseRank?.[winner.productId];
+  const safestChoiceText =
+    typeof winnerWorstCaseRank === "number" && winnerWorstCaseRank <= 2
+      ? `Safest choice: even in its worst case across these scenarios, ${winner.productName} never ranks below ${formatRank(winnerWorstCaseRank)}.`
+      : null;
+  const flipThresholdText =
+    typeof robustness?.flipThreshold === "number" && runnerUp
+      ? `It would take roughly a ${pct(robustness.flipThreshold)}% priority shift before ${runnerUp.productName} overtakes ${winner.productName}.`
+      : null;
+  const canAdjustRobustness = Boolean(engineInputRef.current?.engineInput);
 
   // Radar data
   const radarData = softCriteria.map((c) => {
@@ -307,7 +530,23 @@ export default function ResultsPage() {
   });
 
   return (
-    <main className="min-h-screen px-4 py-10">
+    <>
+      <style>{`
+        .memo-print-root {
+          display: none;
+        }
+
+        @media print {
+          .results-screen-export {
+            display: none !important;
+          }
+
+          .memo-print-root {
+            display: block !important;
+          }
+        }
+      `}</style>
+      <main className={`${printMemo ? "results-screen-export " : ""}min-h-screen px-4 py-10`}>
       <div className="max-w-5xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -391,51 +630,89 @@ export default function ResultsPage() {
           )}
         </section>
 
-        {/* Leaderboard */}
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-          <div className="px-6 py-4 border-b border-zinc-800">
-            <h2 className="text-white font-semibold">Ranking</h2>
-          </div>
-          <div className="divide-y divide-zinc-800">
-            {ranked.map((r, i) => (
-              <div key={r.productId} className="flex items-center gap-4 px-6 py-4">
-                <span
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                  style={{ background: COLORS[i] + "33", color: COLORS[i] }}
-                >
-                  {i + 1}
-                </span>
-                <span className="text-white font-medium flex-1">{r.productName}</span>
-                <div className="flex items-center gap-3">
-                  <div className="w-32 h-2 rounded-full bg-zinc-800 overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{ width: `${pct(r.score)}%`, background: COLORS[i] }}
-                    />
-                  </div>
-                  <span className="text-white font-bold w-8 text-right">{pct(r.score)}</span>
-                </div>
-                {result.nearTie && i < 2 && (
-                  <span className="text-xs text-yellow-400 border border-yellow-400/30 px-2 py-0.5 rounded-full">
-                    near tie
-                  </span>
-                )}
-              </div>
-            ))}
-            {eliminated.map((r) => (
-              <div key={r.productId} className="flex items-center gap-4 px-6 py-4 opacity-50">
-                <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-red-500/10 text-red-400">
-                  ✕
-                </span>
-                <span className="text-zinc-400 flex-1 line-through">{r.productName}</span>
-                <span className="text-xs text-red-400">
-                  {result.eliminated.find((e) => e.productId === r.productId)?.criterionName}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0 * 0.08, duration: 0.45, ease: "easeOut" }}
+        >
+          {/* Leaderboard */}
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900 overflow-hidden">
+            <div className="px-6 py-4 border-b border-zinc-800">
+              <h2 className="text-white font-semibold">Ranking</h2>
+            </div>
+            <div className="divide-y divide-zinc-800">
+              {ranked.map((r, i) => {
+                const rowContent = (
+                  <>
+                    <span
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                      style={{ background: COLORS[i] + "33", color: COLORS[i] }}
+                    >
+                      {i + 1}
+                    </span>
+                    <span className="text-white font-medium flex-1">{r.productName}</span>
+                    {i === 0 ? (
+                      <span className="ml-auto mr-4 text-5xl font-bold tracking-tight text-white">
+                        {displayScores[r.productId] ?? pct(r.score)}
+                      </span>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <div className="w-32 h-2 rounded-full bg-zinc-800 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{ width: `${displayScores[r.productId] ?? pct(r.score)}%`, background: COLORS[i] }}
+                          />
+                        </div>
+                        <span className="text-white font-bold w-8 text-right">{displayScores[r.productId] ?? pct(r.score)}</span>
+                      </div>
+                    )}
+                    {result.nearTie && i < 2 && (
+                      <span className="text-xs text-yellow-400 border border-yellow-400/30 px-2 py-0.5 rounded-full">
+                        near tie
+                      </span>
+                    )}
+                  </>
+                );
 
+                return i === 0 ? (
+                  <div key={r.productId} className="bg-gradient-to-r from-green-500/40 via-green-400/10 to-transparent p-[1px] rounded-2xl">
+                    <div className="rounded-2xl bg-zinc-900">
+                      <div className="flex items-center gap-4 px-6 py-4">{rowContent}</div>
+                      {winnerConfidenceText && (
+                        <div className="px-6 pb-4 -mt-1">
+                          <span className="inline-flex rounded-full border border-green-500/20 bg-green-500/10 px-3 py-1 text-xs font-medium text-green-300">
+                            {winnerConfidenceText}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div key={r.productId} className="flex items-center gap-4 px-6 py-4">
+                    {rowContent}
+                  </div>
+                );
+              })}
+              {eliminated.map((r) => (
+                <div key={r.productId} className="flex items-center gap-4 px-6 py-4 opacity-50">
+                  <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-red-500/10 text-red-400">
+                    ✕
+                  </span>
+                  <span className="text-zinc-400 flex-1 line-through">{r.productName}</span>
+                  <span className="text-xs text-red-400">
+                    {result.eliminated.find((e) => e.productId === r.productId)?.criterionName}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1 * 0.08, duration: 0.45, ease: "easeOut" }}
+        >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Scorecard */}
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900 overflow-hidden">
@@ -515,101 +792,154 @@ export default function ResultsPage() {
             </div>
           </section>
         </div>
+        </motion.div>
 
         {/* Verdict */}
-        <section className="no-print rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-          <h2 className="text-white font-semibold mb-3">Verdict</h2>
-          <p className="text-zinc-300 leading-relaxed whitespace-pre-line">{verdict}</p>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 2 * 0.08, duration: 0.45, ease: "easeOut" }}
+        >
+          <section className="no-print rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+            <h2 className="text-white font-semibold mb-3">Verdict</h2>
+            <p className="text-zinc-300 leading-relaxed whitespace-pre-line">{verdict}</p>
 
-          {result.sensitivity && (
-            <div className="mt-4 flex items-start gap-3 px-4 py-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-sm text-yellow-300">
-              <span className="text-yellow-400 mt-0.5">⚡</span>
-              <span>
-                If <strong>{result.sensitivity.criterionName}</strong> weight increased from{" "}
-                {pct(result.sensitivity.currentWeight)}% to {pct(result.sensitivity.tippingWeight)}%,{" "}
-                <strong>{result.sensitivity.overtakingProductName}</strong> would overtake.
-              </span>
-            </div>
-          )}
-        </section>
+            {(safestChoiceText || flipThresholdText) && (
+              <div className="mt-4 space-y-2 text-sm leading-6 text-zinc-400">
+                {safestChoiceText && <p>{safestChoiceText}</p>}
+                {flipThresholdText && <p>{flipThresholdText}</p>}
+              </div>
+            )}
 
-        {/* Weight sliders */}
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-          <h2 className="text-white font-semibold mb-1">Adjust weights</h2>
-          <p className="text-zinc-500 text-xs mb-5">Drag to re-run scoring live</p>
-          <div className="space-y-4">
-            {softCriteria.map((c) => (
-              <div key={c.id} className="flex items-center gap-4">
-                <span className="text-zinc-400 text-sm w-40 shrink-0 truncate">{c.name}</span>
+            {canAdjustRobustness && (
+              <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <label htmlFor="priority-firmness" className="text-sm font-medium text-zinc-200">
+                    How firm are your priorities?
+                  </label>
+                  {robustnessPending && (
+                    <span className="text-xs text-zinc-500">Updating confidence…</span>
+                  )}
+                </div>
                 <input
+                  id="priority-firmness"
                   type="range"
                   min={0}
-                  max={1}
-                  step={0.01}
-                  value={weights[c.id] ?? 0}
-                  onChange={(e) => onSliderChange(c.id, parseFloat(e.target.value))}
-                  onMouseUp={onSliderCommit}
-                  onTouchEnd={onSliderCommit}
-                  className="flex-1 accent-green-500"
+                  max={100}
+                  step={1}
+                  value={priorityFirmness}
+                  onChange={(event) => setPriorityFirmness(Number(event.target.value))}
+                  className="w-full accent-green-500"
                 />
-                <span className="text-white text-sm font-medium w-10 text-right">
-                  {pct(weights[c.id] ?? 0)}%
+                <div className="mt-1 flex justify-between text-xs text-zinc-500">
+                  <span>Flexible</span>
+                  <span>Strict</span>
+                </div>
+              </div>
+            )}
+
+            {result.sensitivity && (
+              <div className="mt-4 flex items-start gap-3 px-4 py-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-sm text-yellow-300">
+                <span className="text-yellow-400 mt-0.5">⚡</span>
+                <span>
+                  If <strong>{result.sensitivity.criterionName}</strong> weight increased from{" "}
+                  {pct(result.sensitivity.currentWeight)}% to {pct(result.sensitivity.tippingWeight)}%,{" "}
+                  <strong>{result.sensitivity.overtakingProductName}</strong> would overtake.
                 </span>
               </div>
-            ))}
-          </div>
-          {reweightPending && (
-            <p className="mt-3 text-zinc-500 text-xs">Recalculating…</p>
-          )}
-        </section>
+            )}
+          </section>
+        </motion.div>
 
-        {/* Chat */}
-        <section className="no-print rounded-2xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-          <div className="px-6 py-4 border-b border-zinc-800">
-            <h2 className="text-white font-semibold">Refine</h2>
-            <p className="text-zinc-500 text-xs mt-0.5">
-              Ask questions or say "what if budget didn't matter?"
-            </p>
-          </div>
-
-          {messages.length > 0 && (
-            <div className="px-6 py-4 space-y-4 max-h-80 overflow-y-auto">
-              {messages.map((m, i) => (
-                <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div
-                    className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                      m.role === "user"
-                        ? "bg-green-600 text-white rounded-br-sm"
-                        : "bg-zinc-800 text-zinc-200 rounded-bl-sm"
-                    }`}
-                  >
-                    {m.content}
-                  </div>
+        {/* Weight sliders */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 3 * 0.08, duration: 0.45, ease: "easeOut" }}
+        >
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+            <h2 className="text-white font-semibold mb-1">Adjust weights</h2>
+            <p className="text-zinc-500 text-xs mb-5">Drag to re-run scoring live</p>
+            <div className="space-y-4">
+              {softCriteria.map((c) => (
+                <div key={c.id} className="flex items-center gap-4">
+                  <span className="text-zinc-400 text-sm w-40 shrink-0 truncate">{c.name}</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={weights[c.id] ?? 0}
+                    onChange={(e) => onSliderChange(c.id, parseFloat(e.target.value))}
+                    onMouseUp={onSliderCommit}
+                    onTouchEnd={onSliderCommit}
+                    className="flex-1 accent-green-500"
+                  />
+                  <span className="text-white text-sm font-medium w-10 text-right">
+                    {pct(weights[c.id] ?? 0)}%
+                  </span>
                 </div>
               ))}
-              <div ref={chatEndRef} />
             </div>
-          )}
+            {reweightPending && (
+              <p className="mt-3 text-zinc-500 text-xs">Recalculating…</p>
+            )}
+          </section>
+        </motion.div>
 
-          <div className="px-4 py-3 border-t border-zinc-800 flex gap-2">
-            <input
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendChat()}
-              placeholder="What if security mattered more?"
-              disabled={chatLoading}
-              className="flex-1 bg-zinc-800 text-white placeholder-zinc-500 rounded-xl px-4 py-2 text-sm outline-none border border-zinc-700 focus:border-zinc-500 transition-colors"
-            />
-            <button
-              onClick={sendChat}
-              disabled={!chatInput.trim() || chatLoading}
-              className="px-4 py-2 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white text-sm transition-colors"
-            >
-              {chatLoading ? "…" : "→"}
-            </button>
-          </div>
-        </section>
+        {/* Chat */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 4 * 0.08, duration: 0.45, ease: "easeOut" }}
+        >
+          <section className="no-print rounded-2xl border border-zinc-800 bg-zinc-900 overflow-hidden">
+            <div className="px-6 py-4 border-b border-zinc-800">
+              <h2 className="text-white font-semibold">Refine</h2>
+              <p className="text-zinc-500 text-xs mt-0.5">
+                Ask questions or say "what if budget didn't matter?"
+              </p>
+            </div>
+
+            {messages.length > 0 && (
+              <div className="px-6 py-4 space-y-4 max-h-80 overflow-y-auto">
+                {messages.map((m, i) => (
+                  <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                        m.role === "user"
+                          ? "bg-green-600 text-white rounded-br-sm"
+                          : "bg-zinc-800 text-zinc-200 rounded-bl-sm"
+                      }`}
+                    >
+                      {m.content}
+                    </div>
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+            )}
+
+            <div className="px-4 py-3 border-t border-zinc-800 flex gap-2">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && sendChat()}
+                placeholder="What if security mattered more?"
+                disabled={chatLoading}
+                className="flex-1 bg-zinc-800 text-white placeholder-zinc-500 rounded-xl px-4 py-2 text-sm outline-none border border-zinc-700 focus:border-zinc-500 transition-colors"
+              />
+              <button
+                onClick={sendChat}
+                disabled={!chatInput.trim() || chatLoading}
+                className="px-4 py-2 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white text-sm transition-colors"
+              >
+                {chatLoading ? "…" : "→"}
+              </button>
+            </div>
+          </section>
+        </motion.div>
         <div className="no-print flex justify-end">
           <button
             type="button"
@@ -620,6 +950,10 @@ export default function ResultsPage() {
           </button>
         </div>
       </div>
-    </main>
+      </main>
+      <div className="memo-print-root">
+        {printMemo && <DecisionMemo memo={printMemo} />}
+      </div>
+    </>
   );
 }

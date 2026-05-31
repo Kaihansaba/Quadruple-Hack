@@ -140,14 +140,28 @@ export function HomeClient() {
   }
 
   return (
-    <main className="min-h-screen px-4 pb-32 pt-12">
-      <div className="mx-auto flex w-full max-w-3xl flex-col items-center">
+    <main className="relative min-h-screen px-4 pb-32 pt-12">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        {/* dot grid */}
+        <div className="bg-dot-grid absolute inset-0 opacity-[0.15]" />
+        {/* green orb */}
+        <div className="absolute left-1/2 top-0 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/4 rounded-full bg-green-500/[0.07] blur-[120px]" />
+      </div>
+      <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center">
         <div className="mb-9 flex items-center gap-2 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-sm text-green-400">
           <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
           Profile loaded: <strong className="font-semibold">{PROFILE_BADGE}</strong>
         </div>
 
-        <h1 className="mb-8 max-w-2xl text-center text-4xl font-bold leading-tight text-white sm:text-5xl">
+        <h1
+          className="mb-8 max-w-2xl text-center text-4xl font-bold leading-tight tracking-tight sm:text-5xl"
+          style={{
+            background: "linear-gradient(to bottom, #ffffff 0%, #a1a1aa 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            backgroundClip: "text"
+          }}
+        >
           What are you deciding today?
         </h1>
 
@@ -300,7 +314,7 @@ export function HomeClient() {
 
       </div>
 
-      <div className="app-bottom-bar fixed bottom-0 left-0 right-0 z-10 bg-zinc-950/95 px-4 py-4 transition-[left] duration-300">
+      <div className="app-bottom-bar fixed bottom-4 left-0 right-0 z-10 px-4 py-4 transition-[left] duration-300 sm:bottom-6">
         <div className="mx-auto max-w-3xl space-y-2">
           <motion.button
             type="button"
@@ -350,7 +364,7 @@ function ProductCard({
         isEditing
           ? "border-green-400 bg-green-500/15 shadow-[0_0_0_1px_rgba(34,197,94,0.18),0_0_34px_rgba(34,197,94,0.2)]"
           : "border-zinc-700 bg-zinc-900"
-      }`}
+      } hover:border-zinc-600 hover:shadow-[0_0_24px_rgba(34,197,94,0.1)] transition-shadow`}
       title="Double click to edit"
     >
       {isEditing && (
