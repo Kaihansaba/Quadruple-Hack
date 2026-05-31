@@ -773,7 +773,7 @@ export default function ResultsPage() {
               </p>
               <div className="flex items-center gap-3">
                 <ProductLogo name={winner.productName} size={44} />
-                <h2 className="text-3xl font-bold text-white">{winner.productName}</h2>
+                <h2 className="text-3xl font-bold text-white light:text-zinc-900">{winner.productName}</h2>
               </div>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-300 light:text-zinc-700">
                 {recommendationDescription}
@@ -781,7 +781,7 @@ export default function ResultsPage() {
               {estimatedPrice && (
                 <p className="mt-3 inline-flex items-baseline gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-1.5">
                   <span className="text-xs uppercase tracking-wide text-blue-300 light:text-blue-700">Estimated price</span>
-                  <span className="text-base font-semibold text-white">{estimatedPrice}</span>
+                  <span className="text-base font-semibold text-white light:text-zinc-900">{estimatedPrice}</span>
                 </p>
               )}
             </div>
@@ -814,7 +814,7 @@ export default function ResultsPage() {
                     <ProductLogo name={r.productName} size={28} />
                     <span className="text-white light:text-zinc-900 font-medium flex-1">{r.productName}</span>
                     {i === 0 ? (
-                      <span className="ml-auto mr-4 text-5xl font-bold tracking-tight text-white">
+                      <span className="ml-auto mr-4 text-5xl font-bold tracking-tight text-white light:text-zinc-900">
                         {displayScores[r.productId] ?? pct(r.score)}
                       </span>
                     ) : (
@@ -825,7 +825,7 @@ export default function ResultsPage() {
                             style={{ width: `${displayScores[r.productId] ?? pct(r.score)}%`, background: COLORS[i] }}
                           />
                         </div>
-                        <span className="text-white font-bold w-8 text-right">{displayScores[r.productId] ?? pct(r.score)}</span>
+                        <span className="text-white light:text-zinc-900 font-bold w-8 text-right">{displayScores[r.productId] ?? pct(r.score)}</span>
                       </div>
                     )}
                     {result.nearTie && i < 2 && (
@@ -871,7 +871,7 @@ export default function ResultsPage() {
                           className="overflow-hidden"
                         >
                           <p className="px-6 pb-4 -mt-1 text-sm leading-6 text-zinc-300 light:text-zinc-700">
-                            <span className="font-medium text-white">Why not {r.productName}? </span>
+                            <span className="font-medium text-white light:text-zinc-900">Why not {r.productName}? </span>
                             {buildWhyNotReason({
                               productId: r.productId,
                               productName: r.productName,
@@ -1022,7 +1022,7 @@ export default function ResultsPage() {
 
           {/* Radar */}
           <section className="rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-900 light:bg-white p-5">
-            <h2 className="text-white font-semibold mb-4">Shape of strengths</h2>
+            <h2 className="text-white light:text-zinc-900 font-semibold mb-4">Shape of strengths</h2>
             <ResponsiveContainer width="100%" height={260}>
               <RadarChart data={radarData}>
                 <PolarGrid stroke={colorScheme === "light" ? "#e4e4e7" : "#27272a"} />
@@ -1062,8 +1062,8 @@ export default function ResultsPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 2 * 0.08, duration: 0.45, ease: "easeOut" }}
         >
-          <section className="no-print rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-            <h2 className="text-white font-semibold mb-3">Verdict</h2>
+          <section className="no-print rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-900 light:bg-white p-6">
+            <h2 className="text-white light:text-zinc-900 font-semibold mb-3">Verdict</h2>
             <p className="text-zinc-300 light:text-zinc-700 leading-relaxed whitespace-pre-line">{verdict}</p>
           </section>
         </motion.div>
@@ -1077,7 +1077,7 @@ export default function ResultsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* What would change this recommendation */}
             <section className="rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-900 light:bg-white p-6">
-              <h2 className="text-white font-semibold mb-1">What would change this recommendation</h2>
+              <h2 className="text-white light:text-zinc-900 font-semibold mb-1">What would change this recommendation</h2>
               <p className="text-zinc-500 text-xs mb-4">The conditions that would shift the pick</p>
               <ul className="space-y-3">
                 {whatWouldChange.map((item, i) => (
@@ -1096,7 +1096,7 @@ export default function ResultsPage() {
 
             {/* Assumptions */}
             <section className="rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-900 light:bg-white p-6">
-              <h2 className="text-white font-semibold mb-1">Assumptions</h2>
+              <h2 className="text-white light:text-zinc-900 font-semibold mb-1">Assumptions</h2>
               <p className="text-zinc-500 text-xs mb-4">What this recommendation rests on</p>
 
               <dl className="space-y-3 text-sm">

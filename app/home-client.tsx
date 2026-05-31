@@ -728,19 +728,19 @@ function ProductConfirmationPage({
         initial={{ opacity: 0, y: 18, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.28, ease: "easeOut" }}
-        className="w-full rounded-3xl border border-zinc-800 bg-zinc-950/90 p-6 shadow-2xl shadow-black/30 backdrop-blur sm:p-8"
+        className="w-full rounded-3xl border border-zinc-800 light:border-zinc-200 bg-zinc-950/90 light:bg-white/90 p-6 shadow-2xl shadow-black/30 backdrop-blur sm:p-8"
       >
-        <p className="mb-2 text-sm font-medium uppercase tracking-wide text-blue-300">Confirm products</p>
-        <h1 className="mb-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+        <p className="mb-2 text-sm font-medium uppercase tracking-wide text-blue-300 light:text-blue-700">Confirm products</p>
+        <h1 className="mb-3 text-3xl font-bold tracking-tight text-white light:text-zinc-900 sm:text-4xl">
           Check the product names before analysis.
         </h1>
-        <p className="mb-6 max-w-2xl text-sm leading-6 text-zinc-400">
+        <p className="mb-6 max-w-2xl text-sm leading-6 text-zinc-400 light:text-zinc-600">
           Use the suggested correction, revert to the original text, edit a name, or remove anything that should not be compared.
         </p>
 
         <div className="grid gap-4 md:grid-cols-2">
           {products.map((product, index) => (
-            <div key={`${product.originalName}-${index}`} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
+            <div key={`${product.originalName}-${index}`} className="rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-900/80 light:bg-zinc-50 p-4">
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-zinc-500">
@@ -751,7 +751,7 @@ function ProductConfirmationPage({
                 <button
                   type="button"
                   onClick={() => removeProduct(index)}
-                  className="rounded-lg px-2 py-1 text-sm text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+                  className="rounded-lg px-2 py-1 text-sm text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200 light:hover:bg-zinc-100 light:hover:text-zinc-700"
                 >
                   Remove
                 </button>
@@ -762,7 +762,7 @@ function ProductConfirmationPage({
                   <span className="text-zinc-400">Suggested correction:</span>{" "}
                   <span className="line-through decoration-blue-300/60">{product.nameAsGiven}</span>
                   <span> → </span>
-                  <span className="font-semibold text-white">{product.nameNormalized}</span>
+                  <span className="font-semibold text-white light:text-zinc-900">{product.nameNormalized}</span>
                   {product.note && <p className="mt-1 text-xs text-blue-200/80">{product.note}</p>}
                   <div className="mt-2 flex gap-2">
                     <button
@@ -788,7 +788,7 @@ function ProductConfirmationPage({
                 <input
                   value={product.name}
                   onChange={(event) => updateProduct(index, { name: event.target.value })}
-                  className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-blue-400"
+                  className="w-full rounded-xl border border-zinc-700 light:border-zinc-300 bg-zinc-950 light:bg-white px-3 py-2 text-sm text-white light:text-zinc-900 outline-none transition-colors focus:border-blue-400"
                 />
               </label>
             </div>
@@ -808,7 +808,7 @@ function ProductConfirmationPage({
           <button
             type="button"
             onClick={onBack}
-            className="rounded-xl border border-zinc-700 px-5 py-3 text-sm font-semibold text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-900"
+            className="rounded-xl border border-zinc-700 light:border-zinc-300 px-5 py-3 text-sm font-semibold text-zinc-200 light:text-zinc-700 transition-colors hover:border-zinc-500 hover:bg-zinc-900 light:hover:bg-zinc-100"
           >
             Back to edit
           </button>

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { animate } from "framer-motion";
+import { useColorScheme } from "@/lib/use-color-scheme";
 
 // Half-circle speedometer gauge. Fills left→right to `value` (0–100) with an
 // animated arc, the colour reflecting how strong the score is, and the number
@@ -28,6 +29,7 @@ export default function ScoreGauge({
   const [display, setDisplay] = useState(0);
   const gradId = useId();
   const [from, to] = gradientStops(clamped);
+  const colorScheme = useColorScheme();
 
   useEffect(() => {
     // Count the number up.
@@ -61,7 +63,7 @@ export default function ScoreGauge({
           <path
             d={ARC_PATH}
             fill="none"
-            stroke="rgba(255,255,255,0.08)"
+            stroke={colorScheme === "light" ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.08)"}
             strokeWidth={9}
             strokeLinecap="round"
           />
@@ -79,10 +81,10 @@ export default function ScoreGauge({
           />
         </svg>
         <div className="absolute inset-x-0 bottom-0 flex items-end justify-center">
-          <span className="text-5xl font-bold leading-none tracking-tight text-white">{display}</span>
+          <span className="text-5xl font-bold leading-none tracking-tight text-white light:text-zinc-900">{display}</span>
         </div>
       </div>
-      <span className="mt-1 text-xs uppercase tracking-wide text-blue-300">{label}</span>
+      <span className="mt-1 text-xs uppercase tracking-wide text-blue-300 light:text-blue-700">{label}</span>
     </div>
   );
 }

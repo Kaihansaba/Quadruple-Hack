@@ -15,7 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={geist.variable} suppressHydrationWarning>
       <head>
         {/* Runs before hydration — prevents flash of wrong theme */}
-        <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('verdict:theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');})()` }} />
+        <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('verdict:theme');var sysLight=window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches;if(t==='light'||(t===null&&sysLight))document.documentElement.setAttribute('data-theme','light');})()` }} />
       </head>
       <body>
         <AppShell>{children}</AppShell>
