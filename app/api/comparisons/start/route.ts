@@ -6,7 +6,7 @@ import { DEMO_PROFILE } from "@/lib/demo-profile";
 import { parseProducts } from "@/lib/product-parser";
 import { buildStartResponse, type StartDocument } from "@/lib/start-response";
 
-const PRODUCT_SEARCH_TIMEOUT_MS = 12_000;
+const PRODUCT_SEARCH_TIMEOUT_MS = 120_000;
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
