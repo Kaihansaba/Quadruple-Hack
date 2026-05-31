@@ -38,6 +38,16 @@ describe("start comparability", () => {
     expect(prompt.instructions.join("\n")).toContain("criteria (array), questions (array)");
   });
 
+  it("adds force-compare instructions when the buyer continues after a warning", () => {
+    const prompt = JSON.parse(call1Prompt(["Chrome", "ChatGPT Atlas"], DEMO_PROFILE, undefined, true));
+    const instructions = prompt.instructions.join("\n");
+
+    expect(prompt.task).toContain("explicitly chose to continue");
+    expect(instructions).not.toContain('If "incomparable", set criteria=[] and questions=[]');
+    expect(instructions).toContain("Do NOT return \"incomparable\"");
+    expect(instructions).toContain("Use \"comparable_with_note\"");
+  });
+
   it("proceeds as before for two comparable products", () => {
     const response = buildStartResponse({
       comparisonId: "cmp_test",
