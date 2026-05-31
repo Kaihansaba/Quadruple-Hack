@@ -9,7 +9,7 @@ import { animate } from "framer-motion";
 const ARC_PATH = "M 6 50 A 44 44 0 0 1 94 50"; // top semicircle, flat side at y=50
 
 function gradientStops(value: number): [string, string] {
-  if (value >= 80) return ["#5eead4", "#14b8a6"]; // strong — teal
+  if (value >= 80) return ["#93c5fd", "#2d71bf"]; // strong — rose
   if (value >= 40) return ["#fcd34d", "#f59e0b"]; // moderate — amber
   return ["#fca5a5", "#ef4444"]; // weak — red
 }
@@ -82,7 +82,7 @@ export default function ScoreGauge({
           <span className="text-5xl font-bold leading-none tracking-tight text-white">{display}</span>
         </div>
       </div>
-      <span className="mt-1 text-xs uppercase tracking-wide text-teal-300">{label}</span>
+      <span className="mt-1 text-xs uppercase tracking-wide text-blue-300">{label}</span>
     </div>
   );
 }

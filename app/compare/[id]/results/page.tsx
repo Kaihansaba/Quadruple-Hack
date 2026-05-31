@@ -31,7 +31,7 @@ import type { Call1Output } from "@/lib/prompts";
 
 type Product = { id: string; name: string };
 
-const COLORS = ["#2dd4bf", "#3b82f6", "#f59e0b", "#a855f7", "#ef4444"];
+const COLORS = ["#2d71bf", "#3b82f6", "#f59e0b", "#a855f7", "#10b981"];
 const MIN_ROBUSTNESS_BAND = 0.15;
 const MAX_ROBUSTNESS_BAND = 0.6;
 const DEFAULT_PRIORITY_FIRMNESS = 44;
@@ -39,7 +39,7 @@ const DEFAULT_PRIORITY_FIRMNESS = 44;
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function scoreColor(v: number) {
-  if (v >= 0.7) return "bg-teal-500/20 light:bg-teal-100 text-teal-300 light:text-teal-700";
+  if (v >= 0.7) return "bg-blue-500/20 light:bg-blue-100 text-blue-300 light:text-blue-700";
   if (v >= 0.4) return "bg-yellow-500/20 light:bg-yellow-100 text-yellow-300 light:text-yellow-700";
   return "bg-red-500/20 light:bg-red-100 text-red-300 light:text-red-700";
 }
@@ -701,10 +701,10 @@ export default function ResultsPage() {
           </button>
         </div>
 
-        <section className="rounded-3xl border border-teal-500/25 bg-teal-500/10 p-6">
+        <section className="rounded-3xl border border-blue-500/25 bg-blue-500/10 p-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-teal-300 light:text-teal-700">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-blue-300 light:text-blue-700">
                 Recommendation
               </p>
               <div className="flex items-center gap-3">
@@ -715,8 +715,8 @@ export default function ResultsPage() {
                 {recommendationDescription}
               </p>
               {estimatedPrice && (
-                <p className="mt-3 inline-flex items-baseline gap-2 rounded-xl border border-teal-500/20 bg-teal-500/10 px-3 py-1.5">
-                  <span className="text-xs uppercase tracking-wide text-teal-300 light:text-teal-700">Estimated price</span>
+                <p className="mt-3 inline-flex items-baseline gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-1.5">
+                  <span className="text-xs uppercase tracking-wide text-blue-300 light:text-blue-700">Estimated price</span>
                   <span className="text-base font-semibold text-white">{estimatedPrice}</span>
                 </p>
               )}
@@ -773,12 +773,12 @@ export default function ResultsPage() {
                 );
 
                 return i === 0 ? (
-                  <div key={r.productId} className="bg-gradient-to-r from-teal-500/40 via-teal-400/10 to-transparent p-[1px] rounded-2xl">
+                  <div key={r.productId} className="bg-gradient-to-r from-blue-500/40 via-blue-400/10 to-transparent p-[1px] rounded-2xl">
                     <div className="rounded-2xl bg-zinc-900 light:bg-white">
                       <div className="flex items-center gap-4 px-6 py-4">{rowContent}</div>
                       {winnerConfidenceText && (
                         <div className="px-6 pb-4 -mt-1">
-                          <span className="inline-flex rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1 text-xs font-medium text-teal-300 light:text-teal-700">
+                          <span className="inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-300 light:text-blue-700">
                             {winnerConfidenceText}
                           </span>
                         </div>
@@ -1007,13 +1007,13 @@ export default function ResultsPage() {
               <ul className="space-y-3">
                 {whatWouldChange.map((item, i) => (
                   <li key={i} className="flex items-start gap-2.5 text-sm leading-6 text-zinc-300 light:text-zinc-700">
-                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-400" />
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-400" />
                     <span>{item}</span>
                   </li>
                 ))}
               </ul>
               {safestChoiceText && (
-                <p className="mt-4 rounded-xl border border-teal-500/15 bg-teal-500/5 px-3 py-2 text-xs leading-5 text-teal-300 light:text-teal-700">
+                <p className="mt-4 rounded-xl border border-blue-500/15 bg-blue-500/5 px-3 py-2 text-xs leading-5 text-blue-300 light:text-blue-700">
                   {safestChoiceText}
                 </p>
               )}
@@ -1093,7 +1093,7 @@ export default function ResultsPage() {
                     <div
                       className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                         m.role === "user"
-                          ? "bg-teal-600 text-white rounded-br-sm"
+                          ? "bg-blue-600 text-white rounded-br-sm"
                           : "bg-zinc-800 light:bg-zinc-100 text-zinc-200 light:text-zinc-700 rounded-bl-sm"
                       }`}
                     >
@@ -1118,7 +1118,7 @@ export default function ResultsPage() {
               <button
                 onClick={sendChat}
                 disabled={!chatInput.trim() || chatLoading}
-                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white text-sm transition-colors"
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm transition-colors"
               >
                 {chatLoading ? "…" : "→"}
               </button>
@@ -1129,7 +1129,7 @@ export default function ResultsPage() {
           <button
             type="button"
             onClick={exportPdf}
-            className="rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-500"
+            className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-500"
           >
             Export result as PDF
           </button>

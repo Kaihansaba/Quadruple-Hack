@@ -107,7 +107,7 @@ export default function ProductLogo({
       aria-hidden="true"
       title={name}
       className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-lg ${
-        exhausted ? "bg-teal-500/15 text-teal-300" : "bg-white"
+        exhausted ? "bg-blue-500/15 text-blue-300" : "bg-white"
       } ${className}`}
       style={{ width: size, height: size }}
     >

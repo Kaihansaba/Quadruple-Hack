@@ -176,7 +176,7 @@ export default function ClarifyPage() {
               <h1 className="text-2xl font-bold text-white light:text-zinc-900">Tune the decision</h1>
               <p className="mt-1 text-sm text-zinc-500">Answer the questions below, then analyze.</p>
             </div>
-            <div className="rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1.5 text-xs text-teal-300 light:text-teal-700">
+            <div className="rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs text-blue-300 light:text-blue-700">
               Meridian Software profile applied
             </div>
           </div>
@@ -204,7 +204,7 @@ export default function ClarifyPage() {
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-zinc-800 light:bg-zinc-200">
               <div
-                className="h-full rounded-full bg-teal-500 transition-all duration-300"
+                className="h-full rounded-full bg-blue-500 transition-all duration-300"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -243,7 +243,7 @@ export default function ClarifyPage() {
                 transition={{ duration: 0.22, ease: "easeOut" }}
               >
                 <div className="mb-5">
-                  <p className="text-xs font-medium uppercase tracking-wide text-teal-400 light:text-teal-700">
+                  <p className="text-xs font-medium uppercase tracking-wide text-blue-400 light:text-blue-700">
                     {activeQuestion.groupTitle}
                   </p>
                   <p className="mt-1 text-sm text-zinc-500">{activeQuestion.groupSubtitle}</p>
@@ -272,7 +272,7 @@ export default function ClarifyPage() {
             <button
               onClick={submit}
               disabled={loading}
-              className="rounded-xl bg-teal-600 px-7 py-3 text-sm font-semibold text-white transition-colors hover:bg-teal-500 disabled:opacity-40"
+              className="rounded-xl bg-blue-600 px-7 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-40"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
@@ -287,7 +287,7 @@ export default function ClarifyPage() {
             <button
               onClick={() => goNext(totalSteps)}
               disabled={!activeQuestion || (activeQuestion.question.input_type !== "per_product" && !answers[activeQuestion.question.id])}
-              className="rounded-xl bg-teal-600 px-7 py-3 text-sm font-semibold text-white transition-colors hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-xl bg-blue-600 px-7 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Next →
             </button>
@@ -389,12 +389,12 @@ function QuestionCard({
                   onClick={() => onSelect(q.id, a.label)}
                   className={`flex min-h-11 items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition-all ${
                     isSelected
-                      ? "border-teal-500 bg-teal-500/15 text-white light:text-teal-900"
+                      ? "border-blue-500 bg-blue-500/15 text-white light:text-blue-900"
                       : "border-zinc-700 light:border-zinc-200 bg-zinc-900 light:bg-zinc-50 text-zinc-400 light:text-zinc-600 hover:border-zinc-500 light:hover:border-zinc-400 hover:text-zinc-200 light:hover:text-zinc-800"
                   }`}
                 >
                   <span>{a.label}</span>
-                  <span className={`ml-3 h-4 w-4 rounded-full border ${isSelected ? "border-teal-400 bg-teal-400" : "border-zinc-600 light:border-zinc-300"}`} />
+                  <span className={`ml-3 h-4 w-4 rounded-full border ${isSelected ? "border-blue-400 bg-blue-400" : "border-zinc-600 light:border-zinc-300"}`} />
                 </button>
               );
             })}
@@ -408,14 +408,14 @@ function QuestionCard({
               placeholder="Other..."
               className={`w-full rounded-xl border px-3 py-2.5 text-sm text-white light:text-zinc-900 outline-none transition-colors placeholder:text-zinc-600 ${
                 isCustom
-                  ? "border-teal-500 bg-teal-500/10"
+                  ? "border-blue-500 bg-blue-500/10"
                   : "border-zinc-700 light:border-zinc-200 bg-zinc-900 light:bg-zinc-50 focus:border-zinc-500 light:focus:border-zinc-400"
               }`}
             />
           </div>
 
           {q.suggested_answers.some((answer) => answer.from_profile) && (
-            <p className="mt-3 text-xs text-teal-400">Profile suggested option included.</p>
+            <p className="mt-3 text-xs text-blue-400">Profile suggested option included.</p>
           )}
         </>
       )}

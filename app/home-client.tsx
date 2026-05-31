@@ -309,7 +309,7 @@ export function HomeClient() {
         <div className="absolute inset-0 opacity-80 light:hidden">
           <LightRays
             raysOrigin="top-right"
-            raysColor="#2dd4bf"
+            raysColor="#2d71bf"
             raysSpeed={1.2}
             lightSpread={0.8}
             rayLength={1.2}
@@ -322,8 +322,17 @@ export function HomeClient() {
         </div>
         {/* dot grid */}
         <div className="bg-dot-grid absolute inset-0 opacity-[0.10] light:opacity-[0.35]" />
-        {/* teal glow matching the light source */}
-        <div className="absolute right-0 top-0 h-[600px] w-[600px] translate-x-1/4 -translate-y-1/4 rounded-full bg-teal-400/[0.08] blur-[120px]" />
+        {/* blue glow — dark mode */}
+        <div className="absolute right-0 top-0 h-[600px] w-[600px] translate-x-1/4 -translate-y-1/4 rounded-full bg-blue-400/[0.08] blur-[120px] light:hidden" />
+        {/* decorative concentric rings — light mode only */}
+        <div className="pointer-events-none absolute inset-0 hidden light:block overflow-hidden">
+          <div className="absolute left-1/2 top-[38%] h-[720px] w-[720px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#2d71bf]/[0.10]" />
+          <div className="absolute left-1/2 top-[38%] h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#2d71bf]/[0.14]" />
+          <div className="absolute left-1/2 top-[38%] h-[340px] w-[340px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#2d71bf]/[0.20]" />
+          <div className="absolute left-1/2 top-[38%] h-[180px] w-[180px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#2d71bf]/[0.28]" />
+          {/* soft blue radial glow at the centre of the rings */}
+          <div className="absolute left-1/2 top-[38%] h-[400px] w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#2d71bf]/[0.05] blur-[60px]" />
+        </div>
       </div>
       {incomparableMessage ? (
         <IncomparablePage
@@ -339,8 +348,8 @@ export function HomeClient() {
       ) : (
         <>
       <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center">
-        <div className="mb-9 flex items-center gap-2 rounded-full border border-teal-400/30 light:border-teal-600/30 bg-teal-400/10 light:bg-teal-50 px-3 py-1.5 text-sm text-teal-300 light:text-teal-700 backdrop-blur-md">
-          <span className="h-2 w-2 rounded-full bg-teal-400 animate-pulse" />
+        <div className="mb-9 flex items-center gap-2 rounded-full border border-blue-400/30 light:border-blue-600/30 bg-blue-400/10 light:bg-blue-50 px-3 py-1.5 text-sm text-blue-300 light:text-blue-700 backdrop-blur-md">
+          <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" />
           <strong className="font-semibold">{greeting}</strong>
         </div>
 
@@ -379,7 +388,7 @@ export function HomeClient() {
                 initial={{ opacity: 0, scale: 0.96 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
-                className="flex h-64 w-[40rem] max-w-[calc(100vw-2rem)] shrink-0 flex-col items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/[0.02] text-zinc-400 backdrop-blur-md transition-colors hover:border-teal-400/50 hover:bg-teal-400/[0.04] hover:text-teal-200"
+                className="flex h-64 w-[40rem] max-w-[calc(100vw-2rem)] shrink-0 flex-col items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/[0.02] text-zinc-400 backdrop-blur-md transition-colors hover:border-blue-400/50 hover:bg-blue-400/[0.04] hover:text-blue-200"
               >
                 <span className="text-6xl leading-none">+</span>
                 <span className="mt-5 text-xl font-semibold">Add product</span>
@@ -482,7 +491,7 @@ export function HomeClient() {
               <button
                 type="submit"
                 disabled={!canAddProduct || loading}
-                className="rounded-xl bg-teal-400 px-4 py-2 text-sm font-semibold text-[#062925] transition-colors hover:bg-teal-300 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-xl bg-blue-400 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-300 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {editingIndex === null ? "Add product →" : "Save product →"}
               </button>
@@ -500,7 +509,7 @@ export function HomeClient() {
                 type="button"
                 onClick={() => useSuggestion(suggestion)}
                 disabled={loading}
-                className="rounded-full border border-white/10 light:border-zinc-200 bg-white/[0.02] light:bg-zinc-50 px-3 py-1.5 text-sm text-zinc-400 light:text-zinc-600 backdrop-blur-md transition-colors hover:border-teal-400/40 hover:text-teal-200 light:hover:text-teal-700 disabled:opacity-40"
+                className="rounded-full border border-white/10 light:border-zinc-200 bg-white/[0.02] light:bg-zinc-50 px-3 py-1.5 text-sm text-zinc-400 light:text-zinc-600 backdrop-blur-md transition-colors hover:border-blue-400/40 hover:text-blue-200 light:hover:text-blue-700 disabled:opacity-40"
               >
                 {suggestion}
               </button>
@@ -522,12 +531,12 @@ export function HomeClient() {
             transition={{ type: "spring", stiffness: 400, damping: 25 }}
             className={`relative w-full rounded-2xl py-3 text-base font-semibold transition-colors ${
               canCompare
-                ? "bg-teal-400 text-[#062925] shadow-[0_8px_30px_rgba(45,212,191,0.25)] hover:bg-teal-300"
+                ? "bg-blue-400 text-white shadow-[0_8px_30px_rgba(45,113,191,0.25)] hover:bg-blue-300"
                 : "cursor-not-allowed border border-white/10 light:border-zinc-200 bg-white/[0.04] light:bg-zinc-100 text-zinc-500 backdrop-blur-md"
             }`}
           >
             {loading && (
-              <span className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full border-2 border-[#062925]/40 border-t-[#062925] animate-spin" />
+              <span className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full border-2 border-white/40 border-t-white animate-spin" />
             )}
             {products.length === 0
               ? "Add 2 products to compare"
@@ -589,7 +598,7 @@ function IncomparablePage({
           <button
             type="button"
             onClick={onContinue}
-            className="rounded-xl bg-teal-500 px-5 py-3 text-sm font-semibold text-[#062925] transition-colors hover:bg-teal-300"
+            className="rounded-xl bg-blue-500 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-300"
           >
             Continue anyway
           </button>
@@ -651,13 +660,13 @@ function ProductCard({
       transition={{ type: "spring", stiffness: 380, damping: 28 }}
       className={`relative h-24 w-52 shrink-0 cursor-pointer rounded-xl border p-4 backdrop-blur-md transition-shadow ${
         isEditing
-          ? "border-teal-400 bg-teal-400/15 shadow-[0_0_0_1px_rgba(45,212,191,0.18),0_0_34px_rgba(45,212,191,0.2)]"
+          ? "border-blue-400 bg-blue-400/15 shadow-[0_0_0_1px_rgba(45,113,191,0.18),0_0_34px_rgba(45,113,191,0.2)]"
           : "border-white/10 light:border-zinc-200 bg-white/[0.04] light:bg-white"
-      } hover:border-white/20 light:hover:border-zinc-300 hover:shadow-[0_0_24px_rgba(45,212,191,0.12)]`}
+      } hover:border-white/20 light:hover:border-zinc-300 hover:shadow-[0_0_24px_rgba(45,113,191,0.12)]`}
       title="Double click to edit"
     >
       {isEditing && (
-        <div className="absolute left-3 top-2 rounded-full bg-teal-400/15 light:bg-teal-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-teal-300 light:text-teal-700">
+        <div className="absolute left-3 top-2 rounded-full bg-blue-400/15 light:bg-blue-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-300 light:text-blue-700">
           Editing
         </div>
       )}
@@ -719,8 +728,8 @@ function AddProductSlot({ isActive, onClick }: { isActive: boolean; onClick: () 
       transition={{ duration: 0.25, ease: "easeOut" }}
       className={`flex h-24 w-52 shrink-0 flex-col items-center justify-center rounded-xl border border-dashed backdrop-blur-md transition-colors ${
         isActive
-          ? "border-teal-400/70 bg-teal-400/5 text-transparent shadow-[0_0_0_1px_rgba(45,212,191,0.16),0_0_32px_rgba(45,212,191,0.18)]"
-          : "border-white/15 bg-white/[0.02] text-zinc-500 hover:border-teal-400/40 hover:text-zinc-300"
+          ? "border-blue-400/70 bg-blue-400/5 text-transparent shadow-[0_0_0_1px_rgba(45,113,191,0.16),0_0_32px_rgba(45,113,191,0.18)]"
+          : "border-white/15 bg-white/[0.02] text-zinc-500 hover:border-blue-400/40 hover:text-zinc-300"
       }`}
       aria-label={isActive ? "Product entry active" : "Add product"}
     >

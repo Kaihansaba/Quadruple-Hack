@@ -97,11 +97,11 @@ const OnboardCard = ({
                 </span>
               </div>
               <div className="ml-5 h-1.5 overflow-hidden rounded-full bg-zinc-700">
-                {state === "done" && <div className="h-full w-full bg-teal-500" />}
+                {state === "done" && <div className="h-full w-full bg-blue-500" />}
                 {state === "active" && (
                   <motion.div
                     key={current}
-                    className="h-full bg-teal-500"
+                    className="h-full bg-blue-500"
                     initial={{ width: 0 }}
                     // Final step crawls toward ~90% slowly; earlier steps fill fully then advance.
                     animate={{ width: current === lastIndex ? "90%" : "100%" }}
@@ -128,7 +128,7 @@ const OnboardCard = ({
 function StepIcon({ state }: { state: StepState }) {
   if (state === "done") {
     return (
-      <span className="flex size-3.5 shrink-0 items-center justify-center rounded-full bg-teal-500">
+      <span className="flex size-3.5 shrink-0 items-center justify-center rounded-full bg-blue-500">
         <svg
           viewBox="0 0 12 12"
           className="size-2.5 text-black"
@@ -148,7 +148,7 @@ function StepIcon({ state }: { state: StepState }) {
       className={cn(
         "size-3.5 shrink-0 rounded-full border-2",
         state === "active"
-          ? "animate-spin border-teal-400/30 border-t-teal-400"
+          ? "animate-spin border-blue-400/30 border-t-blue-400"
           : "border-zinc-700"
       )}
     />

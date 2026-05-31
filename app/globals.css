@@ -11,8 +11,8 @@
     --border:     #27272a;
     --text:       #fafafa;
     --muted:      #71717a;
-    --accent:     #2dd4bf;
-    --accent-dim: #14b8a6;
+    --accent:     #2d71bf;
+    --accent-dim: #1d5fa3;
     --warn:       #f59e0b;
     --danger:     #ef4444;
   }
@@ -25,8 +25,8 @@
     --border:     #e2e8f0;
     --text:       #0f172a;
     --muted:      #475569;
-    --accent:     #0d9488;
-    --accent-dim: #0f766e;
+    --accent:     #1d5fa3;
+    --accent-dim: #154d87;
     --warn:       #d97706;
     --danger:     #dc2626;
   }
@@ -131,25 +131,25 @@
 
 /* Front face */
 .boxes .box > div.face-front {
-  background: #2dd4bf;
+  background: #2d71bf;
   top: 0;
   left: 0;
   transform: translateZ(calc(var(--size) / 2));
 }
-/* Right face — darker teal for depth */
+/* Right face — darker blue for depth */
 .boxes .box > div.face-right {
-  background: #0d9488;
+  background: #1d5fa3;
   right: 0;
   transform: rotateY(90deg) translateZ(calc(var(--size) / 2));
 }
-/* Top face — brightest teal */
+/* Top face — brightest blue */
 .boxes .box > div.face-top {
-  background: #5eead4;
+  background: #93c5fd;
   transform: rotateX(-90deg) translateZ(calc(var(--size) / 2));
 }
 /* Back face — floor shadow plane pushed behind the stack */
 .boxes .box > div.face-back {
-  background: #062925;
+  background: #020d1a;
   top: 0;
   left: 0;
   transform: translateZ(calc(var(--size) * 3 * -1));
