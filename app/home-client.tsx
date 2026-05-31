@@ -7,7 +7,24 @@ import { upsertComparisonHistory } from "@/lib/comparison-history";
 import type { StartResponse } from "@/lib/api-types";
 import BoxLoader from "@/components/ui/box-loader";
 
-type Product = { name: string; description: string; files: File[] };
+type AttachmentStatus = "parsing" | "parsed" | "no_text" | "error";
+
+type ParsedPage = {
+  page: number;
+  text: string;
+};
+
+type AttachedFile = {
+  id: string;
+  file: File;
+  status: AttachmentStatus;
+  text?: string;
+  pageCount?: number;
+  perPage?: ParsedPage[];
+  error?: string;
+};
+
+type Product = { name: string; description: string; files: AttachedFile[] };
 
 const SUGGESTIONS = ["Salesforce", "HubSpot"];
 const MAX_PRODUCTS = 4;
@@ -30,6 +47,18 @@ function readProfileFirstName() {
   } catch {
     return null;
   }
+}
+
+function createAttachmentId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function isPdf(file: File) {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 }
 
 export function HomeClient() {
@@ -115,15 +144,69 @@ export function HomeClient() {
     }
   }
 
+  function updateAttachment(id: string, patch: Partial<AttachedFile>) {
+    const updateFiles = (files: AttachedFile[]) =>
+      files.map((attachment) => (attachment.id === id ? { ...attachment, ...patch } : attachment));
+
+    setDraft((current) => ({ ...current, files: updateFiles(current.files) }));
+    setProducts((current) =>
+      current.map((product) => ({ ...product, files: updateFiles(product.files) }))
+    );
+  }
+
+  async function parsePdfAttachment(attachment: AttachedFile) {
+    const formData = new FormData();
+    formData.append("file", attachment.file);
+
+    try {
+      const res = await fetch("/api/uploads/parse", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      const data = (await res.json()) as {
+        text?: string;
+        pageCount?: number;
+        perPage?: ParsedPage[];
+        note?: string;
+      };
+      const parsedText = data.text ?? "";
+
+      updateAttachment(attachment.id, {
+        status: parsedText.trim().length > 0 ? "parsed" : "no_text",
+        text: parsedText,
+        pageCount: data.pageCount,
+        perPage: data.perPage ?? []
+      });
+    } catch (err) {
+      updateAttachment(attachment.id, {
+        status: "error",
+        error: err instanceof Error ? err.message : "Parse failed"
+      });
+    }
+  }
+
   function addFiles(fileList: FileList | null) {
     if (!fileList) return;
+    const nextFiles: AttachedFile[] = Array.from(fileList).map((file) => ({
+      id: createAttachmentId(),
+      file,
+      status: isPdf(file) ? "parsing" : "parsed"
+    }));
+
     setDraft((current) => ({
       ...current,
-      files: [...current.files, ...Array.from(fileList)]
+      files: [...current.files, ...nextFiles]
     }));
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+
+    nextFiles.filter((attachment) => isPdf(attachment.file)).forEach(parsePdfAttachment);
   }
 
   function removeFile(index: number) {
@@ -267,17 +350,21 @@ export function HomeClient() {
 
             {draft.files.length > 0 && (
               <div className="flex flex-wrap gap-2 border-b border-zinc-800 py-3">
-                {draft.files.map((file, index) => (
+                {draft.files.map((attachment, index) => (
                   <span
-                    key={`${file.name}-${index}`}
+                    key={attachment.id}
                     className="flex max-w-48 items-center gap-1 rounded-full bg-zinc-700 px-2.5 py-1 text-xs text-zinc-300"
                   >
-                    <span className="truncate">{file.name}</span>
+                    {attachment.status === "parsing" && (
+                      <span className="h-3 w-3 shrink-0 rounded-full border-2 border-zinc-500 border-t-zinc-200 animate-spin" />
+                    )}
+                    <span className="truncate">{attachment.file.name}</span>
+                    <span className="shrink-0 text-zinc-400">{fileStatusLabel(attachment)}</span>
                     <button
                       type="button"
                       onClick={() => removeFile(index)}
                       className="text-zinc-500 transition-colors hover:text-zinc-200"
-                      aria-label={`Remove ${file.name}`}
+                      aria-label={`Remove ${attachment.file.name}`}
                     >
                       ×
                     </button>
@@ -444,6 +531,27 @@ function ProductCard({
       </div>
     </motion.div>
   );
+}
+
+function fileStatusLabel(attachment: AttachedFile) {
+  if (!isPdf(attachment.file)) {
+    return "";
+  }
+
+  if (attachment.status === "parsing") {
+    return "parsing";
+  }
+
+  if (attachment.status === "parsed") {
+    const pages = attachment.pageCount ? ` (${attachment.pageCount} page${attachment.pageCount === 1 ? "" : "s"})` : "";
+    return `parsed ✓${pages}`;
+  }
+
+  if (attachment.status === "no_text") {
+    return "no text found";
+  }
+
+  return "parse failed";
 }
 
 function AddProductSlot({ isActive, onClick }: { isActive: boolean; onClick: () => void }) {
