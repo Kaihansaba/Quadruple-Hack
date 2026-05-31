@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { upsertComparisonHistory } from "@/lib/comparison-history";
 import type { StartResponse } from "@/lib/api-types";
 import BoxLoader from "@/components/ui/box-loader";
+import LightRays from "@/components/ui/light-rays";
 
 type Product = { name: string; description: string; files: File[] };
 
@@ -167,14 +168,29 @@ export function HomeClient() {
     <main className="relative min-h-screen px-4 pb-32 pt-12">
       <AnimatePresence>{loading && <GeneratingOverlay products={products} />}</AnimatePresence>
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        {/* WebGL light rays, angled from the top-right */}
+        <div className="absolute inset-0 opacity-80">
+          <LightRays
+            raysOrigin="top-right"
+            raysColor="#2dd4bf"
+            raysSpeed={1.2}
+            lightSpread={0.8}
+            rayLength={1.2}
+            fadeDistance={1.1}
+            followMouse
+            mouseInfluence={0.1}
+            noiseAmount={0.1}
+            distortion={0.05}
+          />
+        </div>
         {/* dot grid */}
-        <div className="bg-dot-grid absolute inset-0 opacity-[0.15]" />
-        {/* green orb */}
-        <div className="absolute left-1/2 top-0 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/4 rounded-full bg-green-500/[0.07] blur-[120px]" />
+        <div className="bg-dot-grid absolute inset-0 opacity-[0.10]" />
+        {/* teal glow matching the light source */}
+        <div className="absolute right-0 top-0 h-[600px] w-[600px] translate-x-1/4 -translate-y-1/4 rounded-full bg-teal-400/[0.08] blur-[120px]" />
       </div>
       <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center">
-        <div className="mb-9 flex items-center gap-2 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-sm text-green-400">
-          <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+        <div className="mb-9 flex items-center gap-2 rounded-full border border-teal-400/30 bg-teal-400/10 px-3 py-1.5 text-sm text-teal-300 backdrop-blur-md">
+          <span className="h-2 w-2 rounded-full bg-teal-400 animate-pulse" />
           <strong className="font-semibold">{greeting}</strong>
         </div>
 
@@ -211,7 +227,7 @@ export function HomeClient() {
                 initial={{ opacity: 0, scale: 0.96 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
-                className="flex h-64 w-[40rem] max-w-[calc(100vw-2rem)] shrink-0 flex-col items-center justify-center rounded-3xl border border-dashed border-zinc-700 text-zinc-400 transition-colors hover:border-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-200"
+                className="flex h-64 w-[40rem] max-w-[calc(100vw-2rem)] shrink-0 flex-col items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/[0.02] text-zinc-400 backdrop-blur-md transition-colors hover:border-teal-400/50 hover:bg-teal-400/[0.04] hover:text-teal-200"
               >
                 <span className="text-6xl leading-none">+</span>
                 <span className="mt-5 text-xl font-semibold">Add product</span>
@@ -232,9 +248,9 @@ export function HomeClient() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
-            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 p-5"
+            className="w-full rounded-2xl border border-white/10 bg-white/[0.04] p-5 shadow-[0_8px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl"
           >
-            <div className="border-b border-zinc-800 pb-4">
+            <div className="border-b border-white/10 pb-4">
               <label htmlFor="product-name" className="mb-2 block text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Product
               </label>
@@ -250,7 +266,7 @@ export function HomeClient() {
               />
             </div>
 
-            <div className="border-b border-zinc-800 py-4">
+            <div className="border-b border-white/10 py-4">
               <label htmlFor="product-description" className="mb-2 block text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Why you're considering it (optional)
               </label>
@@ -266,7 +282,7 @@ export function HomeClient() {
             </div>
 
             {draft.files.length > 0 && (
-              <div className="flex flex-wrap gap-2 border-b border-zinc-800 py-3">
+              <div className="flex flex-wrap gap-2 border-b border-white/10 py-3">
                 {draft.files.map((file, index) => (
                   <span
                     key={`${file.name}-${index}`}
@@ -300,7 +316,7 @@ export function HomeClient() {
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={loading}
-                  className="flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-zinc-500 hover:text-white disabled:opacity-40"
+                  className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-white/25 hover:text-white disabled:opacity-40"
                 >
                   <PaperclipIcon />
                   Attach
@@ -310,7 +326,7 @@ export function HomeClient() {
               <button
                 type="submit"
                 disabled={!canAddProduct || loading}
-                className="rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-xl bg-teal-400 px-4 py-2 text-sm font-semibold text-[#062925] transition-colors hover:bg-teal-300 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {editingIndex === null ? "Add product →" : "Save product →"}
               </button>
@@ -328,7 +344,7 @@ export function HomeClient() {
                 type="button"
                 onClick={() => useSuggestion(suggestion)}
                 disabled={loading}
-                className="rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-200 disabled:opacity-40"
+                className="rounded-full border border-white/10 bg-white/[0.02] px-3 py-1.5 text-sm text-zinc-400 backdrop-blur-md transition-colors hover:border-teal-400/40 hover:text-teal-200 disabled:opacity-40"
               >
                 {suggestion}
               </button>
@@ -350,12 +366,12 @@ export function HomeClient() {
             transition={{ type: "spring", stiffness: 400, damping: 25 }}
             className={`relative w-full rounded-2xl py-3 text-base font-semibold transition-colors ${
               canCompare
-                ? "bg-green-600 text-white hover:bg-green-500"
-                : "cursor-not-allowed bg-zinc-800 text-zinc-500"
+                ? "bg-teal-400 text-[#062925] shadow-[0_8px_30px_rgba(45,212,191,0.25)] hover:bg-teal-300"
+                : "cursor-not-allowed border border-white/10 bg-white/[0.04] text-zinc-500 backdrop-blur-md"
             }`}
           >
             {loading && (
-              <span className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+              <span className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full border-2 border-[#062925]/40 border-t-[#062925] animate-spin" />
             )}
             {products.length === 0
               ? "Add 2 products to compare"
@@ -377,7 +393,7 @@ function GeneratingOverlay({ products }: { products: Product[] }) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0d0d0f]/95 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0b0f12]/95 px-4 backdrop-blur-sm"
     >
       <div className="mb-14 flex h-24 items-center justify-center">
         <BoxLoader />
@@ -410,15 +426,15 @@ function ProductCard({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -12, scale: 0.95 }}
       transition={{ type: "spring", stiffness: 380, damping: 28 }}
-      className={`relative h-24 w-52 shrink-0 cursor-pointer rounded-xl border p-4 ${
+      className={`relative h-24 w-52 shrink-0 cursor-pointer rounded-xl border p-4 backdrop-blur-md ${
         isEditing
-          ? "border-green-400 bg-green-500/15 shadow-[0_0_0_1px_rgba(34,197,94,0.18),0_0_34px_rgba(34,197,94,0.2)]"
-          : "border-zinc-700 bg-zinc-900"
-      } hover:border-zinc-600 hover:shadow-[0_0_24px_rgba(34,197,94,0.1)] transition-shadow`}
+          ? "border-teal-400 bg-teal-400/15 shadow-[0_0_0_1px_rgba(45,212,191,0.18),0_0_34px_rgba(45,212,191,0.2)]"
+          : "border-white/10 bg-white/[0.04]"
+      } hover:border-white/20 hover:shadow-[0_0_24px_rgba(45,212,191,0.12)] transition-shadow`}
       title="Double click to edit"
     >
       {isEditing && (
-        <div className="absolute left-3 top-2 rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-green-300">
+        <div className="absolute left-3 top-2 rounded-full bg-teal-400/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-teal-300">
           Editing
         </div>
       )}
@@ -454,10 +470,10 @@ function AddProductSlot({ isActive, onClick }: { isActive: boolean; onClick: () 
       initial={{ opacity: 0, x: 16 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.25, ease: "easeOut" }}
-      className={`flex h-24 w-52 shrink-0 flex-col items-center justify-center rounded-xl border border-dashed transition-colors ${
+      className={`flex h-24 w-52 shrink-0 flex-col items-center justify-center rounded-xl border border-dashed backdrop-blur-md transition-colors ${
         isActive
-          ? "border-green-400/70 bg-green-500/5 text-transparent shadow-[0_0_0_1px_rgba(34,197,94,0.16),0_0_32px_rgba(34,197,94,0.18)]"
-          : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
+          ? "border-teal-400/70 bg-teal-400/5 text-transparent shadow-[0_0_0_1px_rgba(45,212,191,0.16),0_0_32px_rgba(45,212,191,0.18)]"
+          : "border-white/15 bg-white/[0.02] text-zinc-500 hover:border-teal-400/40 hover:text-zinc-300"
       }`}
       aria-label={isActive ? "Product entry active" : "Add product"}
     >

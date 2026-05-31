@@ -161,14 +161,14 @@ export default function ClarifyPage() {
       {loading && <RunningOverlay products={data.products.map((p) => p.name)} />}
       <main className="min-h-screen px-4 py-10">
       <div className="mx-auto max-w-4xl">
-        <div className="sticky top-0 z-10 -mx-4 mb-8 border-b border-zinc-900 bg-[#0d0d0f]/95 px-4 pb-5 pt-1 backdrop-blur">
+        <div className="sticky top-0 z-10 -mx-4 mb-8 border-b border-zinc-900 bg-[#0b0f12]/95 px-4 pb-5 pt-1 backdrop-blur">
           <p className="mb-2 text-sm text-zinc-500">Step 2 of 3</p>
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h1 className="text-2xl font-bold text-white">Tune the decision</h1>
               <p className="mt-1 text-sm text-zinc-500">Answer the questions below, then analyze.</p>
             </div>
-            <div className="rounded-full border border-green-500/20 bg-green-500/10 px-3 py-1.5 text-xs text-green-300">
+            <div className="rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1.5 text-xs text-teal-300">
               Meridian Software profile applied
             </div>
           </div>
@@ -198,7 +198,7 @@ export default function ClarifyPage() {
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
               <div
-                className="h-full rounded-full bg-green-500 transition-all duration-300"
+                className="h-full rounded-full bg-teal-500 transition-all duration-300"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -237,7 +237,7 @@ export default function ClarifyPage() {
                 transition={{ duration: 0.22, ease: "easeOut" }}
               >
                 <div className="mb-5">
-                  <p className="text-xs font-medium uppercase tracking-wide text-green-400">
+                  <p className="text-xs font-medium uppercase tracking-wide text-teal-400">
                     {activeQuestion.groupTitle}
                   </p>
                   <p className="mt-1 text-sm text-zinc-500">{activeQuestion.groupSubtitle}</p>
@@ -265,7 +265,7 @@ export default function ClarifyPage() {
             <button
               onClick={submit}
               disabled={loading}
-              className="rounded-xl bg-green-600 px-7 py-3 text-sm font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-40"
+              className="rounded-xl bg-teal-600 px-7 py-3 text-sm font-semibold text-white transition-colors hover:bg-teal-500 disabled:opacity-40"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
@@ -280,7 +280,7 @@ export default function ClarifyPage() {
             <button
               onClick={() => goNext(totalSteps)}
               disabled={!activeQuestion || !answers[activeQuestion.question.id]}
-              className="rounded-xl bg-green-600 px-7 py-3 text-sm font-semibold text-white transition-colors hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-xl bg-teal-600 px-7 py-3 text-sm font-semibold text-white transition-colors hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Next →
             </button>
@@ -300,7 +300,7 @@ export default function ClarifyPage() {
 
 function RunningOverlay({ products }: { products: string[] }) {
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0d0d0f]/95 px-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0b0f12]/95 px-4 backdrop-blur-sm">
       <h2 className="mb-1 text-xl font-bold text-white">Running the comparison</h2>
       <p className="mb-8 max-w-sm text-center text-sm text-zinc-400">
         Gathering live evidence for{" "}
@@ -338,12 +338,12 @@ function QuestionCard({
               onClick={() => onSelect(q.id, a.label)}
               className={`flex min-h-11 items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition-all ${
                 isSelected
-                  ? "border-green-500 bg-green-500/15 text-white"
+                  ? "border-teal-500 bg-teal-500/15 text-white"
                   : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
               }`}
             >
               <span>{a.label}</span>
-              <span className={`ml-3 h-4 w-4 rounded-full border ${isSelected ? "border-green-400 bg-green-400" : "border-zinc-600"}`} />
+              <span className={`ml-3 h-4 w-4 rounded-full border ${isSelected ? "border-teal-400 bg-teal-400" : "border-zinc-600"}`} />
             </button>
           );
         })}
@@ -357,14 +357,14 @@ function QuestionCard({
           placeholder="Other..."
           className={`w-full rounded-xl border px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 ${
             isCustom
-              ? "border-green-500 bg-green-500/10"
+              ? "border-teal-500 bg-teal-500/10"
               : "border-zinc-700 bg-zinc-900 focus:border-zinc-500"
           }`}
         />
       </div>
 
       {q.suggested_answers.some((answer) => answer.from_profile) && (
-        <p className="mt-3 text-xs text-green-400">Profile suggested option included.</p>
+        <p className="mt-3 text-xs text-teal-400">Profile suggested option included.</p>
       )}
     </div>
   );

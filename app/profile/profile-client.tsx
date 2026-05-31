@@ -67,7 +67,7 @@ function weights(input: Record<string, number> | null | undefined) {
             <span className="font-medium text-white">{Math.round(weight * 100)}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-            <div className="h-full rounded-full bg-green-500" style={{ width: `${Math.round(weight * 100)}%` }} />
+            <div className="h-full rounded-full bg-teal-500" style={{ width: `${Math.round(weight * 100)}%` }} />
           </div>
         </div>
       ))}
@@ -128,7 +128,7 @@ function EditableField({
         <input
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-green-500"
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-teal-500"
           placeholder="—"
         />
       ) : (
@@ -175,7 +175,7 @@ export function ProfileClient({ initialProfile }: { initialProfile: ProfileRecor
         <section className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-green-500/25 bg-green-500/10 text-xl font-semibold text-green-300">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-teal-500/25 bg-teal-500/10 text-xl font-semibold text-teal-300">
                 {initials(displayName)}
               </div>
               <div>
@@ -200,7 +200,7 @@ export function ProfileClient({ initialProfile }: { initialProfile: ProfileRecor
                   <button
                     type="button"
                     onClick={save}
-                    className="rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-500"
+                    className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-500"
                   >
                     Save
                   </button>

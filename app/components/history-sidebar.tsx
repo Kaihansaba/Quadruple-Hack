@@ -185,7 +185,7 @@ function Avatar({ name }: { name: string }) {
     .join("") || "P";
 
   return (
-    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-600 text-xs font-semibold text-white">
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-600 text-xs font-semibold text-white">
       {initials}
     </span>
   );

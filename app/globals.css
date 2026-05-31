@@ -2,13 +2,13 @@
 
 @layer base {
   :root {
-    --bg: #0d0d0f;
+    --bg: #0b0f12;
     --surface: #18181b;
     --border: #27272a;
     --text: #fafafa;
     --muted: #71717a;
-    --accent: #22c55e;
-    --accent-dim: #16a34a;
+    --accent: #2dd4bf;
+    --accent-dim: #14b8a6;
     --warn: #f59e0b;
     --danger: #ef4444;
   }
@@ -108,25 +108,25 @@
 
 /* Front face */
 .boxes .box > div.face-front {
-  background: #22c55e;
+  background: #2dd4bf;
   top: 0;
   left: 0;
   transform: translateZ(calc(var(--size) / 2));
 }
-/* Right face — darker green for depth */
+/* Right face — darker teal for depth */
 .boxes .box > div.face-right {
-  background: #15803d;
+  background: #0d9488;
   right: 0;
   transform: rotateY(90deg) translateZ(calc(var(--size) / 2));
 }
-/* Top face — brightest green */
+/* Top face — brightest teal */
 .boxes .box > div.face-top {
-  background: #4ade80;
+  background: #5eead4;
   transform: rotateX(-90deg) translateZ(calc(var(--size) / 2));
 }
 /* Back face — floor shadow plane pushed behind the stack */
 .boxes .box > div.face-back {
-  background: #0a2417;
+  background: #062925;
   top: 0;
   left: 0;
   transform: translateZ(calc(var(--size) * 3 * -1));
@@ -169,4 +169,14 @@
   100% {
     transform: translate(100%, 100%);
   }
+}
+
+/* ── LightRays WebGL background (components/ui/light-rays.tsx) ───────────── */
+.light-rays-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  pointer-events: none;
+  z-index: 3;
+  overflow: hidden;
 }
