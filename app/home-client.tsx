@@ -450,14 +450,21 @@ export function HomeClient() {
           What are you deciding today?
         </h1>
 
-        <div ref={cardsRef} className="mb-6 w-full overflow-x-auto pb-2">
-          <div className={showInitialAdd ? "flex w-full justify-center" : "flex min-w-max gap-3"}>
+        <div ref={cardsRef} className={`mb-6 w-full ${formOpen ? "overflow-x-auto pb-2" : ""}`}>
+          <div className={
+            showInitialAdd
+              ? "flex w-full justify-center"
+              : formOpen
+                ? "flex min-w-max gap-3"
+                : "flex flex-wrap justify-center gap-4"
+          }>
             <AnimatePresence initial={false}>
               {products.map((product, index) => (
                 <ProductCard
                   key={`${product.name}-${index}`}
                   product={product}
                   isEditing={editingIndex === index}
+                  compact={formOpen}
                   onEdit={() => editProduct(index)}
                   onRemove={() => removeProduct(index)}
                 />
@@ -479,7 +486,7 @@ export function HomeClient() {
             )}
 
             {canShowAddSlot && !showInitialAdd && (
-              <AddProductSlot isActive={formOpen && editingIndex === null} onClick={openForm} />
+              <AddProductSlot isActive={formOpen && editingIndex === null} compact={formOpen} onClick={openForm} />
             )}
           </div>
         </div>
@@ -842,11 +849,13 @@ function GeneratingOverlay({ products }: { products: Product[] }) {
 function ProductCard({
   product,
   isEditing,
+  compact,
   onEdit,
   onRemove
 }: {
   product: Product;
   isEditing: boolean;
+  compact: boolean;
   onEdit: () => void;
   onRemove: () => void;
 }) {
@@ -858,7 +867,9 @@ function ProductCard({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -12, scale: 0.95 }}
       transition={{ type: "spring", stiffness: 380, damping: 28 }}
-      className={`relative h-24 w-52 shrink-0 cursor-pointer rounded-xl border p-4 backdrop-blur-md transition-shadow ${
+      className={`relative shrink-0 cursor-pointer rounded-xl border backdrop-blur-md transition-shadow ${
+        compact ? "h-24 w-52 p-4" : "w-64 min-h-[160px] p-5"
+      } ${
         isEditing
           ? "border-blue-400 bg-blue-400/15 shadow-[0_0_0_1px_rgba(45,113,191,0.18),0_0_34px_rgba(45,113,191,0.2)]"
           : "border-white/10 light:border-zinc-200 bg-white/[0.04] light:bg-white"
@@ -879,18 +890,23 @@ function ProductCard({
         ×
       </button>
       <div className={`pr-7 ${isEditing ? "pt-5" : ""}`}>
-        <div className="mb-1 flex items-center gap-2">
-          <ProductLogo name={displayProductName(product)} size={24} />
-          <p className="truncate text-sm font-medium text-white light:text-zinc-900">{displayProductName(product)}</p>
+        <div className={`flex items-center gap-2 ${compact ? "mb-1" : "mb-3"}`}>
+          <ProductLogo name={displayProductName(product)} size={compact ? 24 : 36} />
+          <p className={`truncate font-medium text-white light:text-zinc-900 ${compact ? "text-sm" : "text-base"}`}>
+            {displayProductName(product)}
+          </p>
         </div>
-        <p className="mt-1 overflow-hidden text-xs leading-5 text-zinc-400 light:text-zinc-500 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+        <p className={`overflow-hidden text-zinc-400 light:text-zinc-500 [display:-webkit-box] [-webkit-box-orient:vertical] ${compact ? "text-xs leading-5 [-webkit-line-clamp:2]" : "text-sm leading-6 [-webkit-line-clamp:4]"}`}>
           {product.description || "No note added"}
         </p>
         {product.files.length > 0 && (
-          <div className="mt-2 flex items-center gap-1 text-xs text-zinc-500">
+          <div className={`flex items-center gap-1 text-xs text-zinc-500 ${compact ? "mt-2" : "mt-3"}`}>
             <PaperclipIcon />
             {product.files.length} file{product.files.length === 1 ? "" : "s"}
           </div>
+        )}
+        {!compact && (
+          <p className="mt-4 text-[11px] text-zinc-600 light:text-zinc-400">Double-click to edit</p>
         )}
       </div>
     </motion.div>
@@ -918,25 +934,28 @@ function fileStatusLabel(attachment: AttachedFile) {
   return "parse failed";
 }
 
-function AddProductSlot({ isActive, onClick }: { isActive: boolean; onClick: () => void }) {
+function AddProductSlot({ isActive, compact, onClick }: { isActive: boolean; compact: boolean; onClick: () => void }) {
   return (
     <motion.button
       type="button"
       onClick={onClick}
+      layout
       initial={{ opacity: 0, x: 16 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.25, ease: "easeOut" }}
-      className={`flex h-24 w-52 shrink-0 flex-col items-center justify-center rounded-xl border border-dashed backdrop-blur-md transition-colors ${
+      className={`flex shrink-0 flex-col items-center justify-center rounded-xl border border-dashed backdrop-blur-md transition-colors ${
+        compact ? "h-24 w-52" : "w-64 min-h-[160px]"
+      } ${
         isActive
           ? "border-blue-400/70 bg-blue-400/5 text-transparent shadow-[0_0_0_1px_rgba(45,113,191,0.16),0_0_32px_rgba(45,113,191,0.18)]"
-          : "border-white/15 bg-white/[0.02] text-zinc-500 hover:border-blue-400/40 hover:text-zinc-300"
+          : "border-white/15 light:border-zinc-300 bg-white/[0.02] light:bg-zinc-50 text-zinc-500 hover:border-blue-400/40 hover:text-zinc-300 light:hover:text-blue-700"
       }`}
       aria-label={isActive ? "Product entry active" : "Add product"}
     >
       {!isActive && (
         <>
-          <span className="text-2xl leading-none">+</span>
-          <span className="mt-1 text-sm">Add product</span>
+          <span className={`leading-none ${compact ? "text-2xl" : "text-4xl"}`}>+</span>
+          <span className={`${compact ? "mt-1 text-sm" : "mt-3 text-base font-semibold"}`}>Add product</span>
         </>
       )}
     </motion.button>
