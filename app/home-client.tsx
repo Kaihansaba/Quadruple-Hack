@@ -1,19 +1,95 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { upsertComparisonHistory } from "@/lib/comparison-history";
-import type { StartResponse } from "@/lib/api-types";
+import type { DocumentPage, StartResult } from "@/lib/api-types";
+import { saveSessionData } from "@/lib/session-data";
+import { formatIncomparableMessage } from "@/lib/start-response";
 import BoxLoader from "@/components/ui/box-loader";
+import LightRays from "@/components/ui/light-rays";
 
-type Product = { name: string; description: string; files: File[] };
+type AttachmentStatus = "parsing" | "parsed" | "no_text" | "error";
+
+type ParsedPage = {
+  page: number;
+  text: string;
+};
+
+type StartDocument = {
+  productName: string;
+  text: string;
+  perPage?: DocumentPage[];
+};
+
+type AttachedFile = {
+  id: string;
+  file: File;
+  status: AttachmentStatus;
+  text?: string;
+  pageCount?: number;
+  perPage?: ParsedPage[];
+  error?: string;
+};
+
+type Product = { name: string; description: string; files: AttachedFile[] };
 
 const SUGGESTIONS = ["Salesforce", "HubSpot"];
-const PROFILE_BADGE = "Meridian Software";
 const MAX_PRODUCTS = 4;
+const MAX_DOCUMENT_TEXT_CHARS = 20_000;
+const PROFILE_STORAGE_KEY = "verdict:profile-edits:v1";
 
 const EMPTY_DRAFT: Product = { name: "", description: "", files: [] };
+
+function getGreeting(firstName: string | null) {
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  return firstName ? `${greeting} ${firstName}` : greeting;
+}
+
+function readProfileFirstName() {
+  try {
+    const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { contactName?: string };
+    return parsed.contactName?.trim().split(/\s+/)[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+function createAttachmentId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function isPdf(file: File) {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function productDocuments(products: Product[]): StartDocument[] {
+  return products.flatMap((product) => {
+    const text = product.files
+      .map((attachment) => attachment.text?.trim() ?? "")
+      .filter(Boolean)
+      .join("\n\n")
+      .slice(0, MAX_DOCUMENT_TEXT_CHARS);
+
+    if (!text) return [];
+
+    return [
+      {
+        productName: product.name,
+        text,
+        perPage: product.files.flatMap((attachment) => attachment.perPage ?? [])
+      }
+    ];
+  });
+}
 
 export function HomeClient() {
   const router = useRouter();
@@ -21,8 +97,10 @@ export function HomeClient() {
   const [draft, setDraft] = useState<Product>(EMPTY_DRAFT);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [incomparableMessage, setIncomparableMessage] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [firstName, setFirstName] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
@@ -32,6 +110,11 @@ export function HomeClient() {
   const canCompare = products.length >= 2 && !loading;
   const showInitialAdd = products.length === 0 && !formOpen;
   const canShowAddSlot = products.length < MAX_PRODUCTS && editingIndex === null;
+  const greeting = getGreeting(firstName);
+
+  useEffect(() => {
+    setFirstName(readProfileFirstName());
+  }, []);
 
   async function submit() {
     if (!canCompare) return;
@@ -39,14 +122,27 @@ export function HomeClient() {
     setError(null);
 
     try {
+      const documents = productDocuments(products);
+      const body =
+        documents.length > 0
+          ? { query: products.map((product) => product.name).join(" vs "), documents }
+          : { query: products.map((product) => product.name).join(" vs ") };
+
       const res = await fetch("/api/comparisons/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: products.map((product) => product.name).join(" vs ") })
+        body: JSON.stringify(body)
       });
       if (!res.ok) throw new Error(await res.text());
-      const data: StartResponse = await res.json();
-      const href = `/compare/${data.comparisonId}/clarify?data=${encodeURIComponent(JSON.stringify(data))}`;
+      const data: StartResult = await res.json();
+      if (data.status === "incomparable") {
+        setIncomparableMessage(formatIncomparableMessage(data.comparability.reason));
+        setLoading(false);
+        return;
+      }
+
+      saveSessionData(data.comparisonId, data);
+      const href = `/compare/${data.comparisonId}/clarify`;
       upsertComparisonHistory({
         id: data.comparisonId,
         title: data.products.map((product) => product.name).join(" vs "),
@@ -62,6 +158,7 @@ export function HomeClient() {
 
   function addProduct() {
     if (!canAddProduct) return;
+    setIncomparableMessage(null);
 
     const nextProduct: Product = {
       name: draft.name.trim(),
@@ -84,6 +181,7 @@ export function HomeClient() {
   }
 
   function removeProduct(index: number) {
+    setIncomparableMessage(null);
     setProducts((current) => current.filter((_, productIndex) => productIndex !== index));
     if (editingIndex === index) {
       setDraft(EMPTY_DRAFT);
@@ -92,15 +190,69 @@ export function HomeClient() {
     }
   }
 
+  function updateAttachment(id: string, patch: Partial<AttachedFile>) {
+    const updateFiles = (files: AttachedFile[]) =>
+      files.map((attachment) => (attachment.id === id ? { ...attachment, ...patch } : attachment));
+
+    setDraft((current) => ({ ...current, files: updateFiles(current.files) }));
+    setProducts((current) =>
+      current.map((product) => ({ ...product, files: updateFiles(product.files) }))
+    );
+  }
+
+  async function parsePdfAttachment(attachment: AttachedFile) {
+    const formData = new FormData();
+    formData.append("file", attachment.file);
+
+    try {
+      const res = await fetch("/api/uploads/parse", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      const data = (await res.json()) as {
+        text?: string;
+        pageCount?: number;
+        perPage?: ParsedPage[];
+        note?: string;
+      };
+      const parsedText = data.text ?? "";
+
+      updateAttachment(attachment.id, {
+        status: parsedText.trim().length > 0 ? "parsed" : "no_text",
+        text: parsedText,
+        pageCount: data.pageCount,
+        perPage: data.perPage ?? []
+      });
+    } catch (err) {
+      updateAttachment(attachment.id, {
+        status: "error",
+        error: err instanceof Error ? err.message : "Parse failed"
+      });
+    }
+  }
+
   function addFiles(fileList: FileList | null) {
     if (!fileList) return;
+    const nextFiles: AttachedFile[] = Array.from(fileList).map((file) => ({
+      id: createAttachmentId(),
+      file,
+      status: isPdf(file) ? "parsing" : "parsed"
+    }));
+
     setDraft((current) => ({
       ...current,
-      files: [...current.files, ...Array.from(fileList)]
+      files: [...current.files, ...nextFiles]
     }));
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+
+    nextFiles.filter((attachment) => isPdf(attachment.file)).forEach(parsePdfAttachment);
   }
 
   function removeFile(index: number) {
@@ -112,6 +264,7 @@ export function HomeClient() {
 
   function useSuggestion(suggestion: string) {
     if (products.length >= MAX_PRODUCTS) return;
+    setIncomparableMessage(null);
     setEditingIndex(null);
     setFormOpen(true);
     setDraft((current) => ({ ...current, name: suggestion }));
@@ -125,6 +278,7 @@ export function HomeClient() {
 
   function openForm() {
     if (products.length >= MAX_PRODUCTS) return;
+    setIncomparableMessage(null);
     setEditingIndex(null);
     setDraft(EMPTY_DRAFT);
     setFormOpen(true);
@@ -134,6 +288,7 @@ export function HomeClient() {
   function editProduct(index: number) {
     const product = products[index];
     if (!product) return;
+    setIncomparableMessage(null);
     setDraft(product);
     setEditingIndex(index);
     setFormOpen(true);
@@ -144,15 +299,42 @@ export function HomeClient() {
     <main className="relative min-h-screen px-4 pb-32 pt-12">
       <AnimatePresence>{loading && <GeneratingOverlay products={products} />}</AnimatePresence>
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        {/* WebGL light rays, angled from the top-right */}
+        <div className="absolute inset-0 opacity-80">
+          <LightRays
+            raysOrigin="top-right"
+            raysColor="#2dd4bf"
+            raysSpeed={1.2}
+            lightSpread={0.8}
+            rayLength={1.2}
+            fadeDistance={1.1}
+            followMouse
+            mouseInfluence={0.1}
+            noiseAmount={0.1}
+            distortion={0.05}
+          />
+        </div>
         {/* dot grid */}
-        <div className="bg-dot-grid absolute inset-0 opacity-[0.15]" />
-        {/* green orb */}
-        <div className="absolute left-1/2 top-0 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/4 rounded-full bg-green-500/[0.07] blur-[120px]" />
+        <div className="bg-dot-grid absolute inset-0 opacity-[0.10]" />
+        {/* teal glow matching the light source */}
+        <div className="absolute right-0 top-0 h-[600px] w-[600px] translate-x-1/4 -translate-y-1/4 rounded-full bg-teal-400/[0.08] blur-[120px]" />
       </div>
+      {incomparableMessage ? (
+        <IncomparablePage
+          message={incomparableMessage}
+          products={products.map((product) => product.name)}
+          onBack={() => {
+            setIncomparableMessage(null);
+            setError(null);
+            router.push("/");
+          }}
+        />
+      ) : (
+        <>
       <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center">
-        <div className="mb-9 flex items-center gap-2 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-sm text-green-400">
-          <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
-          Profile loaded: <strong className="font-semibold">{PROFILE_BADGE}</strong>
+        <div className="mb-9 flex items-center gap-2 rounded-full border border-teal-400/30 bg-teal-400/10 px-3 py-1.5 text-sm text-teal-300 backdrop-blur-md">
+          <span className="h-2 w-2 rounded-full bg-teal-400 animate-pulse" />
+          <strong className="font-semibold">{greeting}</strong>
         </div>
 
         <h1
@@ -188,7 +370,7 @@ export function HomeClient() {
                 initial={{ opacity: 0, scale: 0.96 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
-                className="flex h-64 w-[40rem] max-w-[calc(100vw-2rem)] shrink-0 flex-col items-center justify-center rounded-3xl border border-dashed border-zinc-700 text-zinc-400 transition-colors hover:border-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-200"
+                className="flex h-64 w-[40rem] max-w-[calc(100vw-2rem)] shrink-0 flex-col items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/[0.02] text-zinc-400 backdrop-blur-md transition-colors hover:border-teal-400/50 hover:bg-teal-400/[0.04] hover:text-teal-200"
               >
                 <span className="text-6xl leading-none">+</span>
                 <span className="mt-5 text-xl font-semibold">Add product</span>
@@ -209,9 +391,9 @@ export function HomeClient() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
-            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 p-5"
+            className="w-full rounded-2xl border border-white/10 bg-white/[0.04] p-5 shadow-[0_8px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl"
           >
-            <div className="border-b border-zinc-800 pb-4">
+            <div className="border-b border-white/10 pb-4">
               <label htmlFor="product-name" className="mb-2 block text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Product
               </label>
@@ -227,7 +409,7 @@ export function HomeClient() {
               />
             </div>
 
-            <div className="border-b border-zinc-800 py-4">
+            <div className="border-b border-white/10 py-4">
               <label htmlFor="product-description" className="mb-2 block text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Why you're considering it (optional)
               </label>
@@ -243,18 +425,22 @@ export function HomeClient() {
             </div>
 
             {draft.files.length > 0 && (
-              <div className="flex flex-wrap gap-2 border-b border-zinc-800 py-3">
-                {draft.files.map((file, index) => (
+              <div className="flex flex-wrap gap-2 border-b border-white/10 py-3">
+                {draft.files.map((attachment, index) => (
                   <span
-                    key={`${file.name}-${index}`}
+                    key={attachment.id}
                     className="flex max-w-48 items-center gap-1 rounded-full bg-zinc-700 px-2.5 py-1 text-xs text-zinc-300"
                   >
-                    <span className="truncate">{file.name}</span>
+                    {attachment.status === "parsing" && (
+                      <span className="h-3 w-3 shrink-0 rounded-full border-2 border-zinc-500 border-t-zinc-200 animate-spin" />
+                    )}
+                    <span className="truncate">{attachment.file.name}</span>
+                    <span className="shrink-0 text-zinc-400">{fileStatusLabel(attachment)}</span>
                     <button
                       type="button"
                       onClick={() => removeFile(index)}
                       className="text-zinc-500 transition-colors hover:text-zinc-200"
-                      aria-label={`Remove ${file.name}`}
+                      aria-label={`Remove ${attachment.file.name}`}
                     >
                       ×
                     </button>
@@ -277,7 +463,7 @@ export function HomeClient() {
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={loading}
-                  className="flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-zinc-500 hover:text-white disabled:opacity-40"
+                  className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-white/25 hover:text-white disabled:opacity-40"
                 >
                   <PaperclipIcon />
                   Attach
@@ -287,7 +473,7 @@ export function HomeClient() {
               <button
                 type="submit"
                 disabled={!canAddProduct || loading}
-                className="rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-xl bg-teal-400 px-4 py-2 text-sm font-semibold text-[#062925] transition-colors hover:bg-teal-300 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {editingIndex === null ? "Add product →" : "Save product →"}
               </button>
@@ -305,7 +491,7 @@ export function HomeClient() {
                 type="button"
                 onClick={() => useSuggestion(suggestion)}
                 disabled={loading}
-                className="rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-200 disabled:opacity-40"
+                className="rounded-full border border-white/10 bg-white/[0.02] px-3 py-1.5 text-sm text-zinc-400 backdrop-blur-md transition-colors hover:border-teal-400/40 hover:text-teal-200 disabled:opacity-40"
               >
                 {suggestion}
               </button>
@@ -327,12 +513,12 @@ export function HomeClient() {
             transition={{ type: "spring", stiffness: 400, damping: 25 }}
             className={`relative w-full rounded-2xl py-3 text-base font-semibold transition-colors ${
               canCompare
-                ? "bg-green-600 text-white hover:bg-green-500"
-                : "cursor-not-allowed bg-zinc-800 text-zinc-500"
+                ? "bg-teal-400 text-[#062925] shadow-[0_8px_30px_rgba(45,212,191,0.25)] hover:bg-teal-300"
+                : "cursor-not-allowed border border-white/10 bg-white/[0.04] text-zinc-500 backdrop-blur-md"
             }`}
           >
             {loading && (
-              <span className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+              <span className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full border-2 border-[#062925]/40 border-t-[#062925] animate-spin" />
             )}
             {products.length === 0
               ? "Add 2 products to compare"
@@ -343,7 +529,65 @@ export function HomeClient() {
           {error && <p className="text-center text-sm text-red-400">{error}</p>}
         </div>
       </div>
+        </>
+      )}
     </main>
+  );
+}
+
+function IncomparablePage({
+  message,
+  products,
+  onBack
+}: {
+  message: string;
+  products: string[];
+  onBack: () => void;
+}) {
+  return (
+    <div className="relative z-10 mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-3xl items-center justify-center">
+      <motion.section
+        initial={{ opacity: 0, y: 18, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.28, ease: "easeOut" }}
+        className="w-full rounded-3xl border border-zinc-800 bg-zinc-950/90 p-6 shadow-2xl shadow-black/30 backdrop-blur sm:p-8"
+      >
+        <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-400/20 bg-amber-400/10 text-2xl text-amber-300">
+          !
+        </div>
+        <p className="mb-2 text-sm font-medium uppercase tracking-wide text-amber-300">Different decision frames</p>
+        <h1 className="mb-4 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+          These products are not ready to compare.
+        </h1>
+        <p className="max-w-2xl text-base leading-7 text-zinc-300">{message}</p>
+
+        {products.length > 0 && (
+          <div className="mt-6 flex flex-wrap gap-2">
+            {products.map((product, index) => (
+              <span
+                key={`${product}-${index}`}
+                className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300"
+              >
+                {product}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            onClick={onBack}
+            className="rounded-xl bg-green-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-green-500"
+          >
+            Back to home
+          </button>
+          <p className="flex items-center text-sm text-zinc-500">
+            Try comparing items that solve the same problem or belong to the same category.
+          </p>
+        </div>
+      </motion.section>
+    </div>
   );
 }
 
@@ -354,7 +598,7 @@ function GeneratingOverlay({ products }: { products: Product[] }) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0d0d0f]/95 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0b0f12]/95 px-4 backdrop-blur-sm"
     >
       <div className="mb-14 flex h-24 items-center justify-center">
         <BoxLoader />
@@ -387,15 +631,15 @@ function ProductCard({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -12, scale: 0.95 }}
       transition={{ type: "spring", stiffness: 380, damping: 28 }}
-      className={`relative h-24 w-52 shrink-0 cursor-pointer rounded-xl border p-4 ${
+      className={`relative h-24 w-52 shrink-0 cursor-pointer rounded-xl border p-4 backdrop-blur-md ${
         isEditing
-          ? "border-green-400 bg-green-500/15 shadow-[0_0_0_1px_rgba(34,197,94,0.18),0_0_34px_rgba(34,197,94,0.2)]"
-          : "border-zinc-700 bg-zinc-900"
-      } hover:border-zinc-600 hover:shadow-[0_0_24px_rgba(34,197,94,0.1)] transition-shadow`}
+          ? "border-teal-400 bg-teal-400/15 shadow-[0_0_0_1px_rgba(45,212,191,0.18),0_0_34px_rgba(45,212,191,0.2)]"
+          : "border-white/10 bg-white/[0.04]"
+      } hover:border-white/20 hover:shadow-[0_0_24px_rgba(45,212,191,0.12)] transition-shadow`}
       title="Double click to edit"
     >
       {isEditing && (
-        <div className="absolute left-3 top-2 rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-green-300">
+        <div className="absolute left-3 top-2 rounded-full bg-teal-400/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-teal-300">
           Editing
         </div>
       )}
@@ -423,6 +667,27 @@ function ProductCard({
   );
 }
 
+function fileStatusLabel(attachment: AttachedFile) {
+  if (!isPdf(attachment.file)) {
+    return "";
+  }
+
+  if (attachment.status === "parsing") {
+    return "parsing";
+  }
+
+  if (attachment.status === "parsed") {
+    const pages = attachment.pageCount ? ` (${attachment.pageCount} page${attachment.pageCount === 1 ? "" : "s"})` : "";
+    return `parsed ✓${pages}`;
+  }
+
+  if (attachment.status === "no_text") {
+    return "no text found";
+  }
+
+  return "parse failed";
+}
+
 function AddProductSlot({ isActive, onClick }: { isActive: boolean; onClick: () => void }) {
   return (
     <motion.button
@@ -431,10 +696,10 @@ function AddProductSlot({ isActive, onClick }: { isActive: boolean; onClick: () 
       initial={{ opacity: 0, x: 16 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.25, ease: "easeOut" }}
-      className={`flex h-24 w-52 shrink-0 flex-col items-center justify-center rounded-xl border border-dashed transition-colors ${
+      className={`flex h-24 w-52 shrink-0 flex-col items-center justify-center rounded-xl border border-dashed backdrop-blur-md transition-colors ${
         isActive
-          ? "border-green-400/70 bg-green-500/5 text-transparent shadow-[0_0_0_1px_rgba(34,197,94,0.16),0_0_32px_rgba(34,197,94,0.18)]"
-          : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
+          ? "border-teal-400/70 bg-teal-400/5 text-transparent shadow-[0_0_0_1px_rgba(45,212,191,0.16),0_0_32px_rgba(45,212,191,0.18)]"
+          : "border-white/15 bg-white/[0.02] text-zinc-500 hover:border-teal-400/40 hover:text-zinc-300"
       }`}
       aria-label={isActive ? "Product entry active" : "Add product"}
     >

@@ -9,6 +9,8 @@ import {
   type ComparisonHistoryItem
 } from "@/lib/comparison-history";
 
+const PROFILE_STORAGE_KEY = "verdict:profile-edits:v1";
+
 export function HistorySidebar({
   isOpen,
   onClose,
@@ -19,6 +21,8 @@ export function HistorySidebar({
   onOpen: () => void;
 }) {
   const [items, setItems] = useState<ComparisonHistoryItem[]>([]);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileName, setProfileName] = useState("Kaihan saba");
 
   useEffect(() => {
     function refresh() {
@@ -33,6 +37,24 @@ export function HistorySidebar({
       window.removeEventListener("storage", refresh);
       window.removeEventListener(COMPARISON_HISTORY_EVENT, refresh);
     };
+  }, []);
+
+  useEffect(() => {
+    function loadProfileName() {
+      try {
+        const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as { contactName?: string; companyName?: string };
+        const nextName = parsed.contactName?.trim() || parsed.companyName?.trim();
+        if (nextName) setProfileName(nextName);
+      } catch {
+        // keep fallback
+      }
+    }
+
+    loadProfileName();
+    window.addEventListener("storage", loadProfileName);
+    return () => window.removeEventListener("storage", loadProfileName);
   }, []);
 
   return (
@@ -98,8 +120,74 @@ export function HistorySidebar({
             items.map((item) => <HistoryRow key={item.id} item={item} />)
           )}
         </div>
+
+        <div className="relative border-t border-zinc-800 pt-3">
+          {profileOpen && (
+            <div className="absolute bottom-14 left-0 right-0 z-30 rounded-2xl border border-zinc-800 bg-zinc-950 p-2 shadow-2xl shadow-black/40">
+              <div className="mb-2 flex items-center gap-3 rounded-xl px-2 py-2">
+                <Avatar name={profileName} />
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-white">{profileName}</div>
+                  <div className="text-xs text-zinc-500">Profile</div>
+                </div>
+              </div>
+              <div className="h-px bg-zinc-800" />
+              <Link
+                href="/profile"
+                onClick={() => setProfileOpen(false)}
+                className="mt-2 flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-zinc-200 transition-colors hover:bg-zinc-900"
+              >
+                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-zinc-600 text-xs">
+                  i
+                </span>
+                Profile
+              </Link>
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-zinc-500"
+                disabled
+              >
+                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-zinc-700 text-xs">
+                  ⚙
+                </span>
+                Settings
+              </button>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setProfileOpen((current) => !current)}
+            className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-zinc-900"
+            aria-expanded={profileOpen}
+            aria-label="Open profile menu"
+          >
+            <Avatar name={profileName} />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium text-zinc-100">{profileName}</div>
+              <div className="text-xs text-zinc-500">Profile</div>
+            </div>
+            <span className="text-lg text-zinc-500">›</span>
+          </button>
+        </div>
       </aside>
     </>
+  );
+}
+
+function Avatar({ name }: { name: string }) {
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase())
+    .join("") || "P";
+
+  return (
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-600 text-xs font-semibold text-white">
+      {initials}
+    </span>
   );
 }
 

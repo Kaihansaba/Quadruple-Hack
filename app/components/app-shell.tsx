@@ -25,7 +25,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <>
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed z-[5] h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-green-500/[0.08] blur-[90px] transition-transform duration-75"
+        className="pointer-events-none fixed z-[5] h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-teal-500/[0.08] blur-[90px] transition-transform duration-75"
         style={{ left: cursor.x, top: cursor.y }}
       />
       <HistorySidebar

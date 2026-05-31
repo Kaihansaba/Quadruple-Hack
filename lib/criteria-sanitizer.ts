@@ -46,6 +46,7 @@ export function sanitizeCall1OutputForProfile(
   });
 
   return {
+    comparability: output.comparability,
     criteria: normalizedCriteria,
     questions
   };

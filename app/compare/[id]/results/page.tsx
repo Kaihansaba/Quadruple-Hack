@@ -28,7 +28,7 @@ import type { Call1Output } from "@/lib/prompts";
 
 type Product = { id: string; name: string };
 
-const COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#a855f7", "#ef4444"];
+const COLORS = ["#2dd4bf", "#3b82f6", "#f59e0b", "#a855f7", "#ef4444"];
 const MIN_ROBUSTNESS_BAND = 0.15;
 const MAX_ROBUSTNESS_BAND = 0.6;
 const DEFAULT_PRIORITY_FIRMNESS = 44;
@@ -36,7 +36,7 @@ const DEFAULT_PRIORITY_FIRMNESS = 44;
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function scoreColor(v: number) {
-  if (v >= 0.7) return "bg-green-500/20 text-green-300";
+  if (v >= 0.7) return "bg-teal-500/20 text-teal-300";
   if (v >= 0.4) return "bg-yellow-500/20 text-yellow-300";
   return "bg-red-500/20 text-red-300";
 }
@@ -591,10 +591,10 @@ export default function ResultsPage() {
           </button>
         </div>
 
-        <section className="rounded-3xl border border-green-500/25 bg-green-500/10 p-6">
+        <section className="rounded-3xl border border-teal-500/25 bg-teal-500/10 p-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-green-300">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-teal-300">
                 Best option
               </p>
               <h2 className="text-3xl font-bold text-white">{winner.productName}</h2>
@@ -603,9 +603,9 @@ export default function ResultsPage() {
                 <span className="font-semibold text-white">{formatScore(winner.score)}</span>.
               </p>
             </div>
-            <div className="rounded-2xl border border-green-500/25 bg-green-500/10 px-5 py-4 text-center">
+            <div className="rounded-2xl border border-teal-500/25 bg-teal-500/10 px-5 py-4 text-center">
               <div className="text-4xl font-bold text-white">{formatScore(winner.score)}</div>
-              <div className="mt-1 text-xs uppercase tracking-wide text-green-300">Composite</div>
+              <div className="mt-1 text-xs uppercase tracking-wide text-teal-300">Composite</div>
             </div>
           </div>
 
@@ -701,12 +701,12 @@ export default function ResultsPage() {
                 );
 
                 return i === 0 ? (
-                  <div key={r.productId} className="bg-gradient-to-r from-green-500/40 via-green-400/10 to-transparent p-[1px] rounded-2xl">
+                  <div key={r.productId} className="bg-gradient-to-r from-teal-500/40 via-teal-400/10 to-transparent p-[1px] rounded-2xl">
                     <div className="rounded-2xl bg-zinc-900">
                       <div className="flex items-center gap-4 px-6 py-4">{rowContent}</div>
                       {winnerConfidenceText && (
                         <div className="px-6 pb-4 -mt-1">
-                          <span className="inline-flex rounded-full border border-green-500/20 bg-green-500/10 px-3 py-1 text-xs font-medium text-green-300">
+                          <span className="inline-flex rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1 text-xs font-medium text-teal-300">
                             {winnerConfidenceText}
                           </span>
                         </div>
@@ -855,7 +855,7 @@ export default function ResultsPage() {
                   step={1}
                   value={priorityFirmness}
                   onChange={(event) => setPriorityFirmness(Number(event.target.value))}
-                  className="w-full accent-green-500"
+                  className="w-full accent-teal-500"
                 />
                 <div className="mt-1 flex justify-between text-xs text-zinc-500">
                   <span>Flexible</span>
@@ -899,7 +899,7 @@ export default function ResultsPage() {
                     onChange={(e) => onSliderChange(c.id, parseFloat(e.target.value))}
                     onMouseUp={onSliderCommit}
                     onTouchEnd={onSliderCommit}
-                    className="flex-1 accent-green-500"
+                    className="flex-1 accent-teal-500"
                   />
                   <span className="text-white text-sm font-medium w-10 text-right">
                     {pct(weights[c.id] ?? 0)}%
@@ -934,7 +934,7 @@ export default function ResultsPage() {
                     <div
                       className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                         m.role === "user"
-                          ? "bg-green-600 text-white rounded-br-sm"
+                          ? "bg-teal-600 text-white rounded-br-sm"
                           : "bg-zinc-800 text-zinc-200 rounded-bl-sm"
                       }`}
                     >
@@ -959,7 +959,7 @@ export default function ResultsPage() {
               <button
                 onClick={sendChat}
                 disabled={!chatInput.trim() || chatLoading}
-                className="px-4 py-2 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white text-sm transition-colors"
+                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white text-sm transition-colors"
               >
                 {chatLoading ? "…" : "→"}
               </button>
@@ -970,7 +970,7 @@ export default function ResultsPage() {
           <button
             type="button"
             onClick={exportPdf}
-            className="rounded-xl bg-green-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-green-500"
+            className="rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-500"
           >
             Export result as PDF
           </button>

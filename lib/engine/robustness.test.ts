@@ -57,7 +57,7 @@ describe("computeRobustness", () => {
           id: "tie_nimbus_support",
           productId: "prod_nimbus",
           criterionId: "crit_support",
-          rawValue: 0,
+          rawValue: 7,
           sourceUrl: "https://example.com/nimbus/support",
           sourceType: "expert_review",
           confidence: 1
@@ -66,7 +66,7 @@ describe("computeRobustness", () => {
           id: "tie_ledger_price",
           productId: "prod_ledgerflow",
           criterionId: "crit_price",
-          rawValue: 200,
+          rawValue: 125,
           sourceUrl: "https://example.com/ledgerflow/price",
           sourceType: "spec",
           confidence: 1
@@ -75,7 +75,7 @@ describe("computeRobustness", () => {
           id: "tie_ledger_support",
           productId: "prod_ledgerflow",
           criterionId: "crit_support",
-          rawValue: 10,
+          rawValue: 9,
           sourceUrl: "https://example.com/ledgerflow/support",
           sourceType: "expert_review",
           confidence: 1

@@ -8,14 +8,44 @@ export type RobustnessResponse = {
   flipThreshold: number | null;
 };
 
-export type StartResponse = {
-  comparisonId: string;
-  products: Array<{ name: string; url: string | null }>;
-  criteria: Call1Output["criteria"];
-  questions: Call1Output["questions"];
+export type DocumentPage = {
+  page: number;
+  text: string;
 };
 
+export type Comparability = {
+  verdict: "comparable" | "comparable_with_note" | "incomparable";
+  category: string | null;
+  reason: string;
+  incomparable_products?: string[];
+};
+
+export type StartProduct = {
+  name: string;
+  url: string | null;
+  documentText?: string;
+  perPage?: DocumentPage[];
+};
+
+export type StartResponse = {
+  status?: "ready";
+  comparisonId: string;
+  products: StartProduct[];
+  criteria: Call1Output["criteria"];
+  questions: Call1Output["questions"];
+  comparability?: Comparability;
+};
+
+export type StartIncomparableResponse = {
+  status: "incomparable";
+  comparability: Comparability;
+};
+
+export type StartResult = StartResponse | StartIncomparableResponse;
+
 export type ClarifyBody = {
+  products?: StartProduct[];
+  criteria?: Call1Output["criteria"];
   answers: Array<{ questionId: string; question: string; answer: string; category: string }>;
 };
 

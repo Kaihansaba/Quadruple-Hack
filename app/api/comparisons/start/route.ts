@@ -4,10 +4,13 @@ import { call1Prompt, searchPrompt, type Call1Output } from "@/lib/prompts";
 import { sanitizeCall1OutputForProfile } from "@/lib/criteria-sanitizer";
 import { DEMO_PROFILE } from "@/lib/demo-profile";
 import { parseProducts } from "@/lib/product-parser";
-import type { StartResponse } from "@/lib/api-types";
+import { buildStartResponse, type StartDocument } from "@/lib/start-response";
 
 export async function POST(req: NextRequest) {
-  const { query } = await req.json();
+  const { query, documents = [] } = (await req.json()) as {
+    query?: string;
+    documents?: StartDocument[];
+  };
   if (!query) return NextResponse.json({ error: "query required" }, { status: 400 });
 
   const products = parseProducts(query as string);
@@ -38,23 +41,25 @@ export async function POST(req: NextRequest) {
       },
       { role: "user", content: prompt }
     ]);
-    const llmOut = JSON.parse(raw);
-    if (llmOut.error) {
-      return NextResponse.json({ error: llmOut.error }, { status: 422 });
+    const llmOut = JSON.parse(raw) as Call1Output;
+    if ((llmOut as any).error) {
+      return NextResponse.json({ error: (llmOut as any).error }, { status: 422 });
     }
-    parsed = sanitizeCall1OutputForProfile(llmOut as Call1Output, profile);
+    parsed =
+      llmOut.comparability?.verdict === "incomparable"
+        ? llmOut
+        : sanitizeCall1OutputForProfile(llmOut, profile);
   } catch {
     return NextResponse.json({ error: "LLM returned malformed JSON. Please try again." }, { status: 502 });
   }
 
   const comparisonId = `cmp_${Date.now()}`;
-
-  const response: StartResponse = {
+  const response = buildStartResponse({
     comparisonId,
-    products: products.map((name) => ({ name, url: null })),
-    criteria: parsed.criteria,
-    questions: parsed.questions
-  };
+    products,
+    parsed,
+    documents
+  });
 
   return NextResponse.json(response);
 }

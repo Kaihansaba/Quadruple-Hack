@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type MemoSourceType = "spec" | "expert_review" | "user_review" | "vendor_claim";
+export type MemoSourceType = "spec" | "expert_review" | "user_review" | "vendor_claim" | "uploaded_document";
 
 export type MemoCriterion = {
   id: string;

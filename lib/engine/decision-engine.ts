@@ -13,7 +13,8 @@ const SOURCE_WEIGHTS: Record<SourceType, number> = {
   spec: 1,
   expert_review: 0.9,
   user_review: 0.65,
-  vendor_claim: 0.45
+  vendor_claim: 0.45,
+  uploaded_document: 0.45
 };
 
 const DISAGREEMENT_THRESHOLD = 0.2;
@@ -156,16 +157,25 @@ function normalizeCells(
         rawScores.set(cell.productId, clamp01((cell.numericValue ?? 0) / 10));
       }
     } else {
+      // Ratio-to-best scaling: a value's score reflects how close it is to the
+      // best value, so the worst option is proportionally lower but never forced
+      // to 0 (pure min-max would always map the worst value to exactly 0).
       const values = known.map((cell) => cell.numericValue as number);
       const min = Math.min(...values);
       const max = Math.max(...values);
       for (const cell of known) {
         const value = cell.numericValue as number;
-        const normalizedValue = max === min ? 1 : (value - min) / (max - min);
-        rawScores.set(
-          cell.productId,
-          criterion.direction === "lower" ? 1 - normalizedValue : normalizedValue
-        );
+        let score: number;
+        if (max === min) {
+          score = 1; // all equal — no spread to express
+        } else if (criterion.direction === "lower") {
+          // lower is better (e.g. cost): cheapest = 1, 2x the cheapest = 0.5
+          score = min > 0 ? min / value : 1;
+        } else {
+          // higher is better: best = 1, half the best = 0.5
+          score = max > 0 ? value / max : 1;
+        }
+        rawScores.set(cell.productId, clamp01(score));
       }
     }
 
