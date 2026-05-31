@@ -7,6 +7,7 @@ import type { StartResponse } from "@/lib/api-types";
 import type { ClarifyBody } from "@/lib/api-types";
 import { parseSessionData, saveSessionData } from "@/lib/session-data";
 import { upsertComparisonHistory } from "@/lib/comparison-history";
+import OnboardCard from "@/components/ui/onboard-card";
 
 type Answer = {
   questionId: string;
@@ -157,7 +158,9 @@ export default function ClarifyPage() {
   const progress = Math.round(((stepIndex + 1) / totalSteps) * 100);
 
   return (
-    <main className="min-h-screen px-4 py-10">
+    <>
+      {loading && <RunningOverlay products={data.products.map((p) => p.name)} />}
+      <main className="min-h-screen px-4 py-10">
       <div className="mx-auto max-w-4xl">
         <div className="sticky top-0 z-10 -mx-4 mb-8 border-b border-zinc-900 bg-[#0d0d0f]/95 px-4 pb-5 pt-1 backdrop-blur">
           <p className="mb-2 text-sm text-zinc-500">Step 2 of 3</p>
@@ -292,7 +295,21 @@ export default function ClarifyPage() {
           </p>
         )}
       </div>
-    </main>
+      </main>
+    </>
+  );
+}
+
+function RunningOverlay({ products }: { products: string[] }) {
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0d0d0f]/95 px-4 backdrop-blur-sm">
+      <h2 className="mb-1 text-xl font-bold text-white">Running the comparison</h2>
+      <p className="mb-8 max-w-sm text-center text-sm text-zinc-400">
+        Gathering live evidence for{" "}
+        <span className="text-zinc-200">{products.join(" vs ")}</span> and scoring it.
+      </p>
+      <OnboardCard />
+    </div>
   );
 }
 
