@@ -23,7 +23,9 @@ export async function POST(req: NextRequest) {
   let searchContext: string | undefined;
   try {
     searchContext = await perplexitySearchCall(searchPrompt(products));
-    console.log("[Perplexity search result]\n", searchContext);
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[Perplexity search result]\n", searchContext);
+    }
   } catch (err) {
     console.error("[Perplexity search failed]", err);
     // fall back to no search context — Call 1 proceeds with parametric knowledge

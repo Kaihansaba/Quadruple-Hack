@@ -73,5 +73,6 @@ export async function jsonCall(messages: Message[]): Promise<string> {
 
 // Pre-search: grounded product research via Perplexity Sonar Pro
 export async function perplexitySearchCall(query: string): Promise<string> {
-  return chat(MODEL_SEARCH, [{ role: "user", content: query }], false);
+  const raw = await chat(MODEL_SEARCH, [{ role: "user", content: query }], false);
+  return stripFences(raw);
 }
