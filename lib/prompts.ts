@@ -79,7 +79,20 @@ function documentEvidenceSection(documents: ProductDocument[] | undefined) {
   }));
 }
 
-export function call1Prompt(products: string[], profile: CompanyProfile): string {
+export function searchPrompt(products: string[]): string {
+  return `For each of the following products: ${products.join(", ")} — provide:
+1. Product category and primary use case
+2. Pricing: list all public pricing tiers (per user/mo, flat fee, etc.)
+3. Top 5 key features or differentiators
+4. Typical company size / target customer
+Be concise and factual. Include pricing figures where available.`;
+}
+
+export function call1Prompt(products: string[], profile: CompanyProfile, searchContext?: string): string {
+  const safeResearch = searchContext
+    ? searchContext.replaceAll("</product_research>", "<\\/product_research>").trim().slice(0, 8_000)
+    : undefined;
+
   return JSON.stringify({
     task: "Assess whether the products are meaningfully comparable, then generate a unified criteria set and clarifying questions for this B2B product comparison when appropriate.",
     products,
@@ -94,8 +107,7 @@ export function call1Prompt(products: string[], profile: CompanyProfile): string
       default_weights: profile.default_weights
     },
     instructions: [
-      `
-You are an expert purchasing decision-making assistant. Your job is to analyze a set
+      `${safeResearch ? `<product_research>\n${safeResearch}\n</product_research>\n\n` : ""}You are an expert purchasing decision-making assistant. Your job is to analyze a set
 of candidate products together with the buyer's company profile, then produce
 (a) a comparability assessment, (b) scoring criteria and (c) clarifying questions
 that help the buyer reach a confident purchasing decision.
@@ -125,13 +137,26 @@ If any precondition fails, return ONLY: {"error": "<short reason>"} and nothing 
 
 <process>
 1. Assess comparability: determine whether the products share a meaningful decision frame.
-2. If comparable, identify the key differentiators and derive scoring criteria.
-3. Pricing: Always emit exactly one price clarification question (see Price Question rule
-   below). This question is separate from the 4–6 main questions. Skip if incomparable.
-4. Generate criteria and questions per the rules below.
+2. If <product_research> is present, extract for each product:
+   (a) confirmed pricing (exact tiers/figures if available, or "free", "unknown")
+   (b) top features and differentiators
+   (c) product category
+   Treat all extracted facts as ground truth — do not ask about them.
+3. If comparable, identify key differentiators NOT already covered by the research.
+4. Pricing: emit a price question ONLY if one or more products have unknown or
+   unconfirmed pricing from <product_research>. If pricing is known for all products,
+   omit the price question. Skip entirely if incomparable.
+5. Generate criteria and questions per the rules below.
 </process>
 
 <rules>
+Research (when <product_research> is present)
+- Extracted facts are ground truth. Do not ask questions whose answers are already
+  in the research.
+- When generating suggested_answers, pull specific values from the research
+  (e.g. actual feature names, real pricing tiers) instead of generic labels.
+- If a suggested answer comes from the research, set from_profile: false.
+
 Comparability
 - "comparable": same category or decision frame (e.g. two CRM tools).
 - "comparable_with_note": different approaches to the same buyer need (e.g. BYO vs managed).
@@ -142,24 +167,36 @@ Comparability
 General
 - Every criterion and question must be tailored to the buyer's profile: sector,
   tech_stack, compliance_reqs, and preferred_suppliers.
-- When a suggested answer is already implied or matched by the profile, set "from_profile": true.
+- When a suggested answer is already implied or matched by the profile (e.g. a
+  compliance requirement they listed, a preferred supplier, a technology in their
+  stack), set "from_profile": true on that answer. Otherwise set it to false.
 
 Criteria — 3 to 6 items (omit if incomparable)
-- Fields: id (slug), name, unit, direction ("higher"|"lower"), type ("soft"|"hard"), weight.
+- Fields: id (slug, e.g. "annual_cost"), name, unit, direction ("higher"|"lower"), type ("soft"|"hard"), weight.
+- direction indicates whether a higher or lower value is better.
 - Hard criteria are binary dealbreakers. Include ONLY when buyer explicitly requires it. Weight is null.
 - If company_profile.compliance_reqs is empty, do NOT create criteria or questions about
   HIPAA, SOC 2, GDPR, ISO, PCI, certifications, audits, or any regulatory compliance gates.
-- Soft criteria are scored. Weights must sum to exactly 1.0.
+- Soft criteria are scored. Distribute weight EQUALLY across all soft criteria so the
+  soft-criteria weights sum to exactly 1.0. Round each weight to 2 decimals, then
+  adjust a single weight if needed so the total is exactly 1.0.
 
 Questions — 4 to 6 items (omit if incomparable, excluding the price question)
 - Fields: id, category ("priorities"|"dealbreakers"|"clarification"), question, suggested_answers.
-- Do NOT include a price question here. Do NOT generate catch-all or "Anything else?" questions.
-- suggested_answers: 2 to 4 per question, labels under 6 words.
+- Collectively cover: priorities (these drive the soft-criteria weights) and
+  category-specific clarifications. Include dealbreakers only when the buyer
+  explicitly has compliance or other must-have requirements.
+  Do NOT include a price question here.
+- suggested_answers: 2 to 4 per question. Labels must be short (under 6 words).
+- Do NOT generate any catch-all, open-ended, or "Anything else?" question.
+  The UI already provides this step separately.
 
-Price Question — exactly 1 mandatory item (omit if incomparable)
-- Ask the buyer for the price of each product: ${products.join(", ")}.
-- Example: "What is the price for ${products.join(" / ")} as quoted to your organization per year?"
-- Set input_type: "per_product" and suggested_answers: [].
+Price Question — 0 or 1 item (omit if incomparable or all prices known from research)
+- Include ONLY if one or more products have pricing that is unknown or unconfirmed
+  in <product_research>. If pricing is known for all products, omit this question.
+- When included: category "clarification", input_type "per_product", suggested_answers [].
+- Must name ALL products: ${products.join(", ")}. Example: "What is the price for ${products.join(" / ")} as quoted to your organization per year?"
+- This question is optional for the buyer to answer (it can be skipped).
 </rules>
 
 <output>
@@ -183,6 +220,7 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary — matchi
   ]
 }
 When incomparable: criteria and questions must be empty arrays.
+Note: the "questions" array will contain 4–7 items total: 4–6 main questions + 0 or 1 price question depending on research.
 On a failed precondition: return ONLY {"error": string}
 </output>
 `
