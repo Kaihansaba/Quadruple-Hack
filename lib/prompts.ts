@@ -179,7 +179,7 @@ ${forceCompare ? "" : '- If "incomparable", set criteria=[] and questions=[].'}
 ${forceCompare ? `- IMPORTANT: The buyer has explicitly chosen to continue anyway. Do NOT return "incomparable". Use "comparable_with_note" if the products are adjacent, partially overlapping, or only comparable under a buyer-defined frame. The reason must clearly state the limitation and the frame being used.` : ""}
 
 General
-- Every criterion and question must be tailored to the buyer's profile: sector,
+- Every criterion and question must be tailored to the buyer's profile: industry,
   tech_stack, compliance_reqs, and preferred_suppliers.
 - When a suggested answer is already implied or matched by the profile (e.g. a
   compliance requirement they listed, a preferred supplier, a technology in their
