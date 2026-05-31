@@ -1,15 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
-import { structuredCall } from "@/lib/openrouter";
-import { call1Prompt, type Call1Output } from "@/lib/prompts";
+import { perplexitySearchCall, structuredCall } from "@/lib/openrouter";
+import { call1Prompt, searchPrompt, type Call1Output } from "@/lib/prompts";
 import { sanitizeCall1OutputForProfile } from "@/lib/criteria-sanitizer";
 import { DEMO_PROFILE } from "@/lib/demo-profile";
 import { parseProducts } from "@/lib/product-parser";
 import { buildStartResponse, type StartDocument } from "@/lib/start-response";
 
+const PRODUCT_SEARCH_TIMEOUT_MS = 12_000;
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
+}
+
 export async function POST(req: NextRequest) {
-  const { query, documents = [] } = (await req.json()) as {
+  const { query, documents = [], forceCompare = false } = (await req.json()) as {
     query?: string;
     documents?: StartDocument[];
+    forceCompare?: boolean;
   };
   if (!query) return NextResponse.json({ error: "query required" }, { status: 400 });
 
@@ -19,9 +38,24 @@ export async function POST(req: NextRequest) {
   }
 
   const profile = DEMO_PROFILE;
-  const prompt = call1Prompt(products, profile);
-  // let parsed: Call1Output;
-  let parsed: any;
+  let searchContext: string | undefined;
+
+  try {
+    searchContext = await withTimeout(
+      perplexitySearchCall(searchPrompt(products)),
+      PRODUCT_SEARCH_TIMEOUT_MS,
+      "Product search"
+    );
+    if (process.env.DEBUG_PRODUCT_SEARCH === "true") {
+      console.log("[Product search result]\n", searchContext);
+    }
+  } catch (err) {
+    console.error("[Product search failed]", err);
+  }
+
+  const prompt = call1Prompt(products, profile, searchContext, forceCompare);
+  let parsed: Call1Output;
+  // let parsed: any;
   try {
     const raw = await structuredCall([
       {

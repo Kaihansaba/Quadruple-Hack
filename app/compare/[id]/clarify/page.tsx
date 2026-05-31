@@ -331,6 +331,11 @@ function QuestionCard({
   products: string[];
 }) {
   const isPerProduct = q.input_type === "per_product";
+  const targetProductsRaw =
+    isPerProduct && q.target_products && q.target_products.length > 0
+      ? q.target_products.filter((name) => products.includes(name))
+      : products;
+  const targetProducts = targetProductsRaw.length > 0 ? targetProductsRaw : products;
 
   // The answer is "custom" when it doesn't match any suggested chip.
   const isCustom =
@@ -358,7 +363,7 @@ function QuestionCard({
       <p className="mb-5 text-base font-medium leading-7 text-zinc-100">{q.question}</p>
       {isPerProduct ? (
         <div className="flex flex-col gap-3">
-          {products.map((productName) => {
+          {targetProducts.map((productName) => {
             const value = getPerProductValues()[productName] ?? "";
             return (
               <div key={productName} className="flex items-center gap-3">
