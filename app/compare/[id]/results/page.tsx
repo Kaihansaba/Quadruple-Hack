@@ -93,12 +93,53 @@ function buildWhyNotReason({
     .slice(0, 2);
 
   if (drivers.length === 0) {
-    return `${productName} is close, but ${winner.productName} has the stronger overall score by ${pct(gap)} points.`;
+    return `${productName} is a close alternative to ${winner.productName} with no decisive weakness.`;
   }
 
-  return `${productName} trails ${winner.productName} by ${pct(gap)} points, mainly on ${drivers
+  return `${productName} falls behind ${winner.productName} mainly on ${drivers
     .map((driver) => driver.name)
     .join(" and ")}.`;
+}
+
+// ── price / characteristics helpers ───────────────────────────────────────────
+
+function findPriceCriterion(criteria: Call1Output["criteria"]) {
+  return (
+    criteria.find((c) => /usd|cost|price|\$|eur|gbp/i.test(c.unit)) ??
+    criteria.find((c) => /\b(cost|price|pricing)\b/i.test(c.name)) ??
+    null
+  );
+}
+
+function formatPrice(raw: string | number | boolean | null, unit?: string): string | null {
+  if (raw === null || typeof raw === "boolean") return null;
+  const str = String(raw).trim();
+  if (!str) return null;
+  // Already formatted (has a currency symbol or letters) — show as-is.
+  if (/[^0-9.,\s-]/.test(str)) return str;
+  const num = Number(str.replace(/[, ]/g, ""));
+  if (!Number.isFinite(num)) return str;
+  const formatted = `$${num.toLocaleString()}`;
+  return unit && /year|annual|yr/i.test(unit) ? `${formatted}/yr` : formatted;
+}
+
+// The recommended product's two strongest soft criteria, with their real values.
+function winnerHighlights(
+  winnerId: string,
+  softCriteria: Call1Output["criteria"],
+  cells: DecisionEngineResult["cells"]
+) {
+  return softCriteria
+    .map((c) => {
+      const cell = cells.find((cl) => cl.productId === winnerId && cl.criterionId === c.id);
+      return {
+        name: c.name,
+        score: cell?.normalizedValue ?? 0,
+        raw: cell && !cell.missing ? cell.rawValue : null
+      };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 2);
 }
 
 // ── main page ────────────────────────────────────────────────────────────────
@@ -526,7 +567,6 @@ export default function ResultsPage() {
   }
   const eliminated = result.rankings.filter((r) => r.eliminated);
   const winner = ranked[0];
-  const alternatives = result.rankings.filter((ranking) => ranking.productId !== winner.productId);
   const runnerUp = ranked[1];
   const winnerFrequency =
     robustness?.baseWinner === winner.productId ? robustness.winFrequency?.[robustness.baseWinner] : undefined;
@@ -544,6 +584,72 @@ export default function ResultsPage() {
       ? `It would take roughly a ${pct(robustness.flipThreshold)}% priority shift before ${runnerUp.productName} overtakes ${winner.productName}.`
       : null;
   const canAdjustRobustness = Boolean(engineInputRef.current?.engineInput);
+
+  // Recommendation card: estimated price + a characteristic-based one-liner.
+  const priceCriterion = findPriceCriterion(criteria);
+  const winnerPriceCell = priceCriterion
+    ? result.cells.find((c) => c.productId === winner.productId && c.criterionId === priceCriterion.id)
+    : null;
+  const estimatedPrice =
+    winnerPriceCell && !winnerPriceCell.missing
+      ? formatPrice(winnerPriceCell.rawValue, priceCriterion?.unit)
+      : null;
+  const highlights = winnerHighlights(winner.productId, softCriteria, result.cells);
+  const recommendationDescription = highlights.length
+    ? `Strongest on ${highlights
+        .map((h) => (h.raw !== null && h.raw !== "" ? `${h.name} (${h.raw})` : h.name))
+        .join(" and ")}.`
+    : `${winner.productName} is the best overall fit for ${DEMO_PROFILE.name}.`;
+
+  // Assumptions window — buyer inputs + data caveats.
+  const priorities = [...softCriteria]
+    .sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0))
+    .slice(0, 3)
+    .map((c) => c.name);
+  const mustHaves = criteria.filter((c) => c.type === "hard").map((c) => c.name);
+  const dataCaveats = result.cells
+    .filter(
+      (cell) =>
+        products.some((p) => p.id === cell.productId) &&
+        criteria.some((cr) => cr.id === cell.criterionId) &&
+        (cell.missing || cell.imputed || cell.sourcesDisagree || cell.confidence < 0.5)
+    )
+    .map((cell) => {
+      const p = products.find((pr) => pr.id === cell.productId)?.name ?? cell.productId;
+      const cr = criteria.find((c) => c.id === cell.criterionId)?.name ?? cell.criterionId;
+      const why = cell.missing || cell.imputed
+        ? "estimated (no source found)"
+        : cell.sourcesDisagree
+          ? "sources disagree"
+          : "low-confidence source";
+      return `${p} · ${cr}: ${why}`;
+    })
+    .slice(0, 5);
+
+  // What-would-change window — plain-language flip conditions.
+  const whatWouldChange: string[] = [];
+  if (result.sensitivity) {
+    whatWouldChange.push(
+      `If you cared more about ${result.sensitivity.criterionName}, ${result.sensitivity.overtakingProductName} would overtake ${winner.productName}.`
+    );
+  }
+  if (flipThresholdText) whatWouldChange.push(flipThresholdText);
+  const lowConfWinnerCell = result.cells
+    .filter((cell) => cell.productId === winner.productId && !cell.missing)
+    .sort((a, b) => a.confidence - b.confidence)[0];
+  if (lowConfWinnerCell && lowConfWinnerCell.confidence < 0.6) {
+    const crName = criteria.find((c) => c.id === lowConfWinnerCell.criterionId)?.name;
+    if (crName) {
+      whatWouldChange.push(
+        `${winner.productName}'s ${crName} is based on limited evidence — if it turns out weaker, the ranking could shift.`
+      );
+    }
+  }
+  if (whatWouldChange.length === 0) {
+    whatWouldChange.push(
+      `${winner.productName} leads across the criteria you care about; no single change flips the result.`
+    );
+  }
 
   // Radar data
   const radarData = softCriteria.map((c) => {
@@ -595,65 +701,24 @@ export default function ResultsPage() {
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-teal-300">
-                Best option
+                Recommendation
               </p>
               <h2 className="text-3xl font-bold text-white">{winner.productName}</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-300">
-                {winner.productName} has the strongest computed fit with a score of{" "}
-                <span className="font-semibold text-white">{formatScore(winner.score)}</span>.
+                {recommendationDescription}
               </p>
+              {estimatedPrice && (
+                <p className="mt-3 inline-flex items-baseline gap-2 rounded-xl border border-teal-500/20 bg-teal-500/10 px-3 py-1.5">
+                  <span className="text-xs uppercase tracking-wide text-teal-300">Estimated price</span>
+                  <span className="text-base font-semibold text-white">{estimatedPrice}</span>
+                </p>
+              )}
             </div>
             <div className="rounded-2xl border border-teal-500/25 bg-teal-500/10 px-5 py-4 text-center">
               <div className="text-4xl font-bold text-white">{formatScore(winner.score)}</div>
-              <div className="mt-1 text-xs uppercase tracking-wide text-teal-300">Composite</div>
+              <div className="mt-1 text-xs uppercase tracking-wide text-teal-300">Match</div>
             </div>
           </div>
-
-          {alternatives.length > 0 && (
-            <div className="mt-6 grid gap-3 md:grid-cols-2">
-              {alternatives.map((alternative) => {
-                const isOpen = expandedWhyNot === alternative.productId;
-                return (
-                  <button
-                    key={alternative.productId}
-                    type="button"
-                    onClick={() => setExpandedWhyNot(isOpen ? null : alternative.productId)}
-                    className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 text-left transition-colors hover:border-zinc-600"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium text-white">Why not {alternative.productName}?</p>
-                        <p className="mt-1 text-xs text-zinc-500">
-                          Score {formatScore(alternative.score)}
-                          {alternative.eliminated ? " · eliminated" : ""}
-                        </p>
-                      </div>
-                      <span className="text-xl text-zinc-500">{isOpen ? "−" : "+"}</span>
-                    </div>
-                    <AnimatePresence initial={false}>
-                      {isOpen && (
-                        <motion.p
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.2, ease: "easeOut" }}
-                          className="mt-3 overflow-hidden text-sm leading-6 text-zinc-300"
-                        >
-                          {buildWhyNotReason({
-                            productId: alternative.productId,
-                            productName: alternative.productName,
-                            winner,
-                            result,
-                            criteria
-                          })}
-                        </motion.p>
-                      )}
-                    </AnimatePresence>
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </section>
 
         <motion.div
@@ -714,22 +779,83 @@ export default function ResultsPage() {
                     </div>
                   </div>
                 ) : (
-                  <div key={r.productId} className="flex items-center gap-4 px-6 py-4">
-                    {rowContent}
+                  <div key={r.productId}>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedWhyNot(expandedWhyNot === r.productId ? null : r.productId)}
+                      className="flex w-full items-center gap-4 px-6 py-4 text-left transition-colors hover:bg-zinc-800/40"
+                    >
+                      {rowContent}
+                      <span className="ml-1 w-4 text-lg leading-none text-zinc-500">
+                        {expandedWhyNot === r.productId ? "−" : "+"}
+                      </span>
+                    </button>
+                    <AnimatePresence initial={false}>
+                      {expandedWhyNot === r.productId && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2, ease: "easeOut" }}
+                          className="overflow-hidden"
+                        >
+                          <p className="px-6 pb-4 -mt-1 text-sm leading-6 text-zinc-300">
+                            <span className="font-medium text-white">Why not {r.productName}? </span>
+                            {buildWhyNotReason({
+                              productId: r.productId,
+                              productName: r.productName,
+                              winner,
+                              result,
+                              criteria
+                            })}
+                          </p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 );
               })}
-              {eliminated.map((r) => (
-                <div key={r.productId} className="flex items-center gap-4 px-6 py-4 opacity-50">
-                  <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-red-500/10 text-red-400">
-                    ✕
-                  </span>
-                  <span className="text-zinc-400 flex-1 line-through">{r.productName}</span>
-                  <span className="text-xs text-red-400">
-                    {result.eliminated.find((e) => e.productId === r.productId)?.criterionName}
-                  </span>
-                </div>
-              ))}
+              {eliminated.map((r) => {
+                const elimCriterion = result.eliminated.find((e) => e.productId === r.productId)?.criterionName;
+                const isOpen = expandedWhyNot === r.productId;
+                return (
+                  <div key={r.productId}>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedWhyNot(isOpen ? null : r.productId)}
+                      className="flex w-full items-center gap-4 px-6 py-4 text-left opacity-60 transition-opacity hover:opacity-100"
+                    >
+                      <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-red-500/10 text-red-400">
+                        ✕
+                      </span>
+                      <span className="text-zinc-400 flex-1 line-through">{r.productName}</span>
+                      <span className="text-xs text-red-400">{elimCriterion}</span>
+                      <span className="ml-1 w-4 text-lg leading-none text-zinc-500">{isOpen ? "−" : "+"}</span>
+                    </button>
+                    <AnimatePresence initial={false}>
+                      {isOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2, ease: "easeOut" }}
+                          className="overflow-hidden"
+                        >
+                          <p className="px-6 pb-4 -mt-1 text-sm leading-6 text-zinc-300">
+                            {buildWhyNotReason({
+                              productId: r.productId,
+                              productName: r.productName,
+                              winner,
+                              result,
+                              criteria
+                            })}
+                          </p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
             </div>
           </section>
         </motion.div>
@@ -766,11 +892,36 @@ export default function ResultsPage() {
                           (cl) => cl.productId === r.productId && cl.criterionId === c.id
                         );
                         const norm = cell?.normalizedValue ?? 0;
+                        const hasSource = Boolean(cell?.sourceUrl);
+                        const cellTitle =
+                          cell && !cell.missing
+                            ? `${cell.rawValue}${cell.sourceType ? ` · ${cell.sourceType}` : ""}`
+                            : "Estimated — no source found";
+                        const scoreEl = (
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-medium ${scoreColor(norm)} ${
+                              hasSource ? "underline decoration-dotted underline-offset-2" : ""
+                            }`}
+                            title={cellTitle}
+                          >
+                            {pct(norm)}
+                          </span>
+                        );
                         return (
                           <td key={r.productId} className="px-4 py-2.5 text-center">
-                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${scoreColor(norm)}`}>
-                              {pct(norm)}
-                            </span>
+                            {hasSource ? (
+                              <a
+                                href={cell!.sourceUrl!}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-0.5 align-middle transition-opacity hover:opacity-80"
+                              >
+                                {scoreEl}
+                                <span className="text-[10px] text-zinc-500">↗</span>
+                              </a>
+                            ) : (
+                              scoreEl
+                            )}
                             {cell?.sourcesDisagree && (
                               <span className="ml-1 text-yellow-400 text-xs" title="Sources disagree">⚠</span>
                             )}
@@ -829,88 +980,86 @@ export default function ResultsPage() {
           <section className="no-print rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
             <h2 className="text-white font-semibold mb-3">Verdict</h2>
             <p className="text-zinc-300 leading-relaxed whitespace-pre-line">{verdict}</p>
-
-            {(safestChoiceText || flipThresholdText) && (
-              <div className="mt-4 space-y-2 text-sm leading-6 text-zinc-400">
-                {safestChoiceText && <p>{safestChoiceText}</p>}
-                {flipThresholdText && <p>{flipThresholdText}</p>}
-              </div>
-            )}
-
-            {canAdjustRobustness && (
-              <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <label htmlFor="priority-firmness" className="text-sm font-medium text-zinc-200">
-                    How firm are your priorities?
-                  </label>
-                  {robustnessPending && (
-                    <span className="text-xs text-zinc-500">Updating confidence…</span>
-                  )}
-                </div>
-                <input
-                  id="priority-firmness"
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={priorityFirmness}
-                  onChange={(event) => setPriorityFirmness(Number(event.target.value))}
-                  className="w-full accent-teal-500"
-                />
-                <div className="mt-1 flex justify-between text-xs text-zinc-500">
-                  <span>Flexible</span>
-                  <span>Strict</span>
-                </div>
-              </div>
-            )}
-
-            {result.sensitivity && (
-              <div className="mt-4 flex items-start gap-3 px-4 py-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-sm text-yellow-300">
-                <span className="text-yellow-400 mt-0.5">⚡</span>
-                <span>
-                  If <strong>{result.sensitivity.criterionName}</strong> weight increased from{" "}
-                  {pct(result.sensitivity.currentWeight)}% to {pct(result.sensitivity.tippingWeight)}%,{" "}
-                  <strong>{result.sensitivity.overtakingProductName}</strong> would overtake.
-                </span>
-              </div>
-            )}
           </section>
         </motion.div>
 
-        {/* Weight sliders */}
+        {/* What would change + Assumptions */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 3 * 0.08, duration: 0.45, ease: "easeOut" }}
         >
-          <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-            <h2 className="text-white font-semibold mb-1">Adjust weights</h2>
-            <p className="text-zinc-500 text-xs mb-5">Drag to re-run scoring live</p>
-            <div className="space-y-4">
-              {softCriteria.map((c) => (
-                <div key={c.id} className="flex items-center gap-4">
-                  <span className="text-zinc-400 text-sm w-40 shrink-0 truncate">{c.name}</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={weights[c.id] ?? 0}
-                    onChange={(e) => onSliderChange(c.id, parseFloat(e.target.value))}
-                    onMouseUp={onSliderCommit}
-                    onTouchEnd={onSliderCommit}
-                    className="flex-1 accent-teal-500"
-                  />
-                  <span className="text-white text-sm font-medium w-10 text-right">
-                    {pct(weights[c.id] ?? 0)}%
-                  </span>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* What would change this recommendation */}
+            <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+              <h2 className="text-white font-semibold mb-1">What would change this recommendation</h2>
+              <p className="text-zinc-500 text-xs mb-4">The conditions that would shift the pick</p>
+              <ul className="space-y-3">
+                {whatWouldChange.map((item, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-sm leading-6 text-zinc-300">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-400" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+              {safestChoiceText && (
+                <p className="mt-4 rounded-xl border border-teal-500/15 bg-teal-500/5 px-3 py-2 text-xs leading-5 text-teal-300">
+                  {safestChoiceText}
+                </p>
+              )}
+            </section>
+
+            {/* Assumptions */}
+            <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+              <h2 className="text-white font-semibold mb-1">Assumptions</h2>
+              <p className="text-zinc-500 text-xs mb-4">What this recommendation rests on</p>
+
+              <dl className="space-y-3 text-sm">
+                {priorities.length > 0 && (
+                  <div className="flex gap-3">
+                    <dt className="w-28 shrink-0 text-zinc-500">You prioritise</dt>
+                    <dd className="text-zinc-300">{priorities.join(", ")}</dd>
+                  </div>
+                )}
+                {mustHaves.length > 0 && (
+                  <div className="flex gap-3">
+                    <dt className="w-28 shrink-0 text-zinc-500">Must-haves</dt>
+                    <dd className="text-zinc-300">{mustHaves.join(", ")}</dd>
+                  </div>
+                )}
+                {DEMO_PROFILE.budget_ceiling != null && (
+                  <div className="flex gap-3">
+                    <dt className="w-28 shrink-0 text-zinc-500">Budget ceiling</dt>
+                    <dd className="text-zinc-300">${DEMO_PROFILE.budget_ceiling.toLocaleString()}</dd>
+                  </div>
+                )}
+                {DEMO_PROFILE.compliance_reqs.length > 0 && (
+                  <div className="flex gap-3">
+                    <dt className="w-28 shrink-0 text-zinc-500">Compliance</dt>
+                    <dd className="text-zinc-300">{DEMO_PROFILE.compliance_reqs.join(", ")}</dd>
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <dt className="w-28 shrink-0 text-zinc-500">Company</dt>
+                  <dd className="text-zinc-300">{DEMO_PROFILE.name}</dd>
                 </div>
-              ))}
-            </div>
-            {reweightPending && (
-              <p className="mt-3 text-zinc-500 text-xs">Recalculating…</p>
-            )}
-          </section>
+              </dl>
+
+              {dataCaveats.length > 0 && (
+                <div className="mt-4 border-t border-zinc-800 pt-4">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Data caveats</p>
+                  <ul className="space-y-1.5">
+                    {dataCaveats.map((caveat, i) => (
+                      <li key={i} className="flex items-start gap-2 text-xs leading-5 text-zinc-400">
+                        <span className="text-yellow-400">⚠</span>
+                        <span>{caveat}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </section>
+          </div>
         </motion.div>
 
         {/* Chat */}

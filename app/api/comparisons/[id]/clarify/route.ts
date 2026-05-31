@@ -161,20 +161,41 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .join("; ");
     verdict = `No vendor passed ${profile.name}'s mandatory requirements. ${reasons}. Consider expanding the shortlist or re-evaluating the hard criteria.`;
   } else {
+    // Build a characteristic-level evidence table (real extracted values + where they
+    // came from) so the verdict can reason about products, not scoring math.
+    const productName = (productId: string) =>
+      engineProducts.find((p) => p.id === productId)?.name ?? productId;
+    const criterionName = (criterionId: string) =>
+      normalizedCriteria.find((c) => c.id === criterionId)?.name ?? criterionId;
+    const activeRanked = rankedProducts.filter((r) => !r.eliminated);
+    const evidence = result.cells
+      .filter((cell) => !cell.missing && cell.rawValue !== null)
+      .map((cell) => ({
+        product: productName(cell.productId),
+        criterion: criterionName(cell.criterionId),
+        raw_value: cell.rawValue,
+        source_type: cell.sourceType
+      }));
+
     try {
       verdict = await narrateCall([
         {
           role: "system",
-          content: "You are a B2B procurement analyst. Write a clear, specific verdict based on the data provided."
+          content: "You are a B2B procurement analyst. Explain decisions through concrete product characteristics, never internal scoring math."
         },
         {
           role: "user",
           content: call3Prompt(
-            rankedProducts,
-            result.contributions,
-            normalizedCriteria,
-            result.eliminated,
-            result.sensitivity,
+            activeRanked[0]?.name ?? rankedProducts[0]?.name ?? "the recommended option",
+            activeRanked[1]?.name ?? null,
+            normalizedCriteria.map((c) => ({
+              id: c.id,
+              name: c.name,
+              unit: c.unit,
+              direction: c.direction
+            })),
+            evidence,
+            result.eliminated.map((e) => ({ productName: e.productName, criterionName: e.criterionName })),
             profile
           )
         }

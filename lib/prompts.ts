@@ -189,30 +189,35 @@ export function call2Prompt(
 }
 
 export function call3Prompt(
-  products: Array<{ name: string; score: number; eliminated: boolean }>,
-  contributions: Record<string, Record<string, number>>,
-  criteria: Array<{ id: string; name: string; weight: number | null }>,
-  eliminated: Array<{ productName: string; criterionName: string; reason: string }>,
-  sensitivity: { criterionName: string; tippingWeight: number; overtakingProductName: string } | null,
+  winnerName: string,
+  runnerUpName: string | null,
+  criteria: Array<{ id: string; name: string; unit: string; direction: "higher" | "lower" }>,
+  evidence: Array<{
+    product: string;
+    criterion: string;
+    raw_value: string | number | boolean | null;
+    source_type: string | null;
+  }>,
+  eliminated: Array<{ productName: string; criterionName: string }>,
   profile: CompanyProfile
 ): string {
-  const winner = products.find((p) => !p.eliminated);
   return JSON.stringify({
-    task: "Write a concise, defensible verdict explaining the recommendation.",
-    winner: winner?.name ?? "none",
-    ranked_products: products,
-    contributions,
-    criteria: criteria.map((c) => ({ id: c.id, name: c.name, weight: c.weight })),
+    task: "Write a short, defensible verdict explaining why the recommended product is the better buy, grounded entirely in concrete product characteristics.",
+    recommended: winnerName,
+    runner_up: runnerUpName,
+    criteria: criteria.map((c) => ({ name: c.name, unit: c.unit, better_when: c.direction })),
+    // The real extracted value for each product on each criterion (with where it came from).
+    evidence,
     eliminated,
-    sensitivity,
     company_name: profile.name,
     instructions: [
-      "Write 2-3 paragraphs in plain English. No markdown headers.",
-      "First paragraph: name the winner and the top 2-3 reasons (tied to criterion contributions).",
-      "Second paragraph: why eliminated products were cut, or why runner-up lost.",
-      "Third paragraph (if sensitivity exists): what would have to change to flip the result.",
-      "Reference the company name naturally. Be specific — cite numbers where available.",
-      "Return plain text, not JSON."
+      "Write exactly 2 short paragraphs in plain English. No markdown, no headers, no lists.",
+      "Explain the recommendation through concrete PRODUCT CHARACTERISTICS using the real values in `evidence` — compare actual numbers/specs (e.g. price, capacity, ratings) between the recommended product and the runner-up.",
+      "Paragraph 1: why the recommended product is the better fit — its 2-3 strongest concrete advantages, with the actual values.",
+      "Paragraph 2: the main tradeoff or where the runner-up is stronger, and (if any) why eliminated products were ruled out.",
+      "ABSOLUTELY DO NOT mention scores, weights, percentages, points, 'contributions', or any internal scoring math. Talk only about the products themselves.",
+      "Be specific and cite the real values. Reference the company name naturally at most once.",
+      "Return plain text only."
     ]
   });
 }
