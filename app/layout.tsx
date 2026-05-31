@@ -13,6 +13,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={geist.variable}>
+      {/* Runs before hydration to prevent flash of wrong theme */}
+      <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('verdict:theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');})()` }} />
       <body>
         <AppShell>{children}</AppShell>
       </body>

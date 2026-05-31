@@ -14,6 +14,7 @@ import {
 import { redistributeWeight } from "@/lib/engine/decision-engine";
 import { parseSessionData, readSessionData, saveSessionData } from "@/lib/session-data";
 import { upsertComparisonHistory } from "@/lib/comparison-history";
+import { useColorScheme } from "@/lib/use-color-scheme";
 import { DecisionMemo, type MemoData } from "@/app/components/DecisionMemo";
 import { DEMO_PROFILE } from "@/lib/demo-profile";
 import ProductLogo from "@/components/ui/product-logo";
@@ -148,6 +149,7 @@ function winnerHighlights(
 export default function ResultsPage() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
+  const colorScheme = useColorScheme();
 
   const [result, setResult] = useState<DecisionEngineResult | null>(null);
   const [criteria, setCriteria] = useState<Call1Output["criteria"]>([]);
@@ -556,7 +558,7 @@ export default function ResultsPage() {
 
           <div className="no-print text-center">
             <a
-              href="/"
+              href="/home"
               className="inline-block px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium transition-colors"
             >
               ← Start a new comparison
@@ -685,7 +687,7 @@ export default function ResultsPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-zinc-500 text-sm mb-1">Step 3 of 3 — Results</p>
-            <h1 className="text-2xl font-bold text-white">
+            <h1 className="text-2xl font-bold text-white light:text-zinc-900">
               {products.map((p) => p.name).join(" vs ")}
             </h1>
           </div>
@@ -731,11 +733,11 @@ export default function ResultsPage() {
           transition={{ delay: 0 * 0.08, duration: 0.45, ease: "easeOut" }}
         >
           {/* Leaderboard */}
-          <section className="rounded-2xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-            <div className="px-6 py-4 border-b border-zinc-800">
-              <h2 className="text-white font-semibold">Ranking</h2>
+          <section className="rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-900 light:bg-white overflow-hidden">
+            <div className="px-6 py-4 border-b border-zinc-800 light:border-zinc-200">
+              <h2 className="text-white light:text-zinc-900 font-semibold">Ranking</h2>
             </div>
-            <div className="divide-y divide-zinc-800">
+            <div className="divide-y divide-zinc-800 light:divide-zinc-200">
               {ranked.map((r, i) => {
                 const rowContent = (
                   <>
@@ -746,14 +748,14 @@ export default function ResultsPage() {
                       {i + 1}
                     </span>
                     <ProductLogo name={r.productName} size={28} />
-                    <span className="text-white font-medium flex-1">{r.productName}</span>
+                    <span className="text-white light:text-zinc-900 font-medium flex-1">{r.productName}</span>
                     {i === 0 ? (
                       <span className="ml-auto mr-4 text-5xl font-bold tracking-tight text-white">
                         {displayScores[r.productId] ?? pct(r.score)}
                       </span>
                     ) : (
                       <div className="flex items-center gap-3">
-                        <div className="w-32 h-2 rounded-full bg-zinc-800 overflow-hidden">
+                        <div className="w-32 h-2 rounded-full bg-zinc-800 light:bg-zinc-200 overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all"
                             style={{ width: `${displayScores[r.productId] ?? pct(r.score)}%`, background: COLORS[i] }}
@@ -772,7 +774,7 @@ export default function ResultsPage() {
 
                 return i === 0 ? (
                   <div key={r.productId} className="bg-gradient-to-r from-teal-500/40 via-teal-400/10 to-transparent p-[1px] rounded-2xl">
-                    <div className="rounded-2xl bg-zinc-900">
+                    <div className="rounded-2xl bg-zinc-900 light:bg-white">
                       <div className="flex items-center gap-4 px-6 py-4">{rowContent}</div>
                       {winnerConfidenceText && (
                         <div className="px-6 pb-4 -mt-1">
@@ -788,7 +790,7 @@ export default function ResultsPage() {
                     <button
                       type="button"
                       onClick={() => setExpandedWhyNot(expandedWhyNot === r.productId ? null : r.productId)}
-                      className="flex w-full items-center gap-4 px-6 py-4 text-left transition-colors hover:bg-zinc-800/40"
+                      className="flex w-full items-center gap-4 px-6 py-4 text-left transition-colors hover:bg-zinc-800/40 light:hover:bg-zinc-50"
                     >
                       {rowContent}
                       <span className="ml-1 w-4 text-lg leading-none text-zinc-500">
@@ -872,15 +874,15 @@ export default function ResultsPage() {
         >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Scorecard */}
-          <section className="rounded-2xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-            <div className="px-5 py-4 border-b border-zinc-800">
-              <h2 className="text-white font-semibold">Scorecard</h2>
+          <section className="rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-900 light:bg-white overflow-hidden">
+            <div className="px-5 py-4 border-b border-zinc-800 light:border-zinc-200">
+              <h2 className="text-white light:text-zinc-900 font-semibold">Scorecard</h2>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-zinc-800">
-                    <th className="px-4 py-2.5 text-left text-zinc-500 font-normal">Criterion</th>
+                    <th className="px-4 py-2.5 text-left text-zinc-500 light:text-zinc-400 font-normal">Criterion</th>
                     {ranked.map((r, i) => (
                       <th key={r.productId} className="px-4 py-2.5 font-medium" style={{ color: COLORS[i] }}>
                         <span className="flex flex-col items-center gap-1.5">
@@ -891,10 +893,10 @@ export default function ResultsPage() {
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800/50">
+                <tbody className="divide-y divide-zinc-800/50 light:divide-zinc-100">
                   {softCriteria.map((c) => (
                     <tr key={c.id}>
-                      <td className="px-4 py-2.5 text-zinc-300">{c.name}</td>
+                      <td className="px-4 py-2.5 text-zinc-300 light:text-zinc-600">{c.name}</td>
                       {ranked.map((r) => {
                         const cell = result.cells.find(
                           (cl) => cl.productId === r.productId && cl.criterionId === c.id
@@ -944,15 +946,15 @@ export default function ResultsPage() {
           </section>
 
           {/* Radar */}
-          <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+          <section className="rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-900 light:bg-white p-5">
             <h2 className="text-white font-semibold mb-4">Shape of strengths</h2>
             <ResponsiveContainer width="100%" height={260}>
               <RadarChart data={radarData}>
-                <PolarGrid stroke="#27272a" />
-                <PolarAngleAxis dataKey="criterion" tick={{ fill: "#71717a", fontSize: 11 }} />
+                <PolarGrid stroke={colorScheme === "light" ? "#e4e4e7" : "#27272a"} />
+                <PolarAngleAxis dataKey="criterion" tick={{ fill: colorScheme === "light" ? "#52525b" : "#71717a", fontSize: 11 }} />
                 <Tooltip
-                  contentStyle={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 8 }}
-                  labelStyle={{ color: "#fafafa" }}
+                  contentStyle={{ background: colorScheme === "light" ? "#ffffff" : "#18181b", border: `1px solid ${colorScheme === "light" ? "#e4e4e7" : "#27272a"}`, borderRadius: 8 }}
+                  labelStyle={{ color: colorScheme === "light" ? "#09090b" : "#fafafa" }}
                 />
                 {ranked.map((r, i) => (
                   <Radar
@@ -987,7 +989,7 @@ export default function ResultsPage() {
         >
           <section className="no-print rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
             <h2 className="text-white font-semibold mb-3">Verdict</h2>
-            <p className="text-zinc-300 leading-relaxed whitespace-pre-line">{verdict}</p>
+            <p className="text-zinc-300 light:text-zinc-700 leading-relaxed whitespace-pre-line">{verdict}</p>
           </section>
         </motion.div>
 
@@ -999,7 +1001,7 @@ export default function ResultsPage() {
         >
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* What would change this recommendation */}
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+            <section className="rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-900 light:bg-white p-6">
               <h2 className="text-white font-semibold mb-1">What would change this recommendation</h2>
               <p className="text-zinc-500 text-xs mb-4">The conditions that would shift the pick</p>
               <ul className="space-y-3">
@@ -1018,7 +1020,7 @@ export default function ResultsPage() {
             </section>
 
             {/* Assumptions */}
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+            <section className="rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-900 light:bg-white p-6">
               <h2 className="text-white font-semibold mb-1">Assumptions</h2>
               <p className="text-zinc-500 text-xs mb-4">What this recommendation rests on</p>
 
@@ -1076,9 +1078,9 @@ export default function ResultsPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 4 * 0.08, duration: 0.45, ease: "easeOut" }}
         >
-          <section className="no-print rounded-2xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-            <div className="px-6 py-4 border-b border-zinc-800">
-              <h2 className="text-white font-semibold">Refine</h2>
+          <section className="no-print rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-900 light:bg-white overflow-hidden">
+            <div className="px-6 py-4 border-b border-zinc-800 light:border-zinc-200">
+              <h2 className="text-white light:text-zinc-900 font-semibold">Refine</h2>
               <p className="text-zinc-500 text-xs mt-0.5">
                 Ask questions or say "what if budget didn't matter?"
               </p>
@@ -1092,7 +1094,7 @@ export default function ResultsPage() {
                       className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                         m.role === "user"
                           ? "bg-teal-600 text-white rounded-br-sm"
-                          : "bg-zinc-800 text-zinc-200 rounded-bl-sm"
+                          : "bg-zinc-800 light:bg-zinc-100 text-zinc-200 light:text-zinc-700 rounded-bl-sm"
                       }`}
                     >
                       {m.content}
@@ -1103,7 +1105,7 @@ export default function ResultsPage() {
               </div>
             )}
 
-            <div className="px-4 py-3 border-t border-zinc-800 flex gap-2">
+            <div className="px-4 py-3 border-t border-zinc-800 light:border-zinc-200 flex gap-2">
               <input
                 type="text"
                 value={chatInput}
@@ -1111,7 +1113,7 @@ export default function ResultsPage() {
                 onKeyDown={(e) => e.key === "Enter" && sendChat()}
                 placeholder="What if security mattered more?"
                 disabled={chatLoading}
-                className="flex-1 bg-zinc-800 text-white placeholder-zinc-500 rounded-xl px-4 py-2 text-sm outline-none border border-zinc-700 focus:border-zinc-500 transition-colors"
+                className="flex-1 bg-zinc-800 light:bg-zinc-50 text-white light:text-zinc-900 placeholder-zinc-500 rounded-xl px-4 py-2 text-sm outline-none border border-zinc-700 light:border-zinc-200 focus:border-zinc-500 light:focus:border-zinc-400 transition-colors"
               />
               <button
                 onClick={sendChat}

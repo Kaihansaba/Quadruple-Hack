@@ -8,6 +8,7 @@ import {
   readComparisonHistory,
   type ComparisonHistoryItem
 } from "@/lib/comparison-history";
+import { ThemeToggle } from "./theme-toggle";
 
 const PROFILE_STORAGE_KEY = "verdict:profile-edits:v1";
 
@@ -62,7 +63,7 @@ export function HistorySidebar({
       <button
         type="button"
         onClick={onOpen}
-        className={`no-print fixed left-3 top-3 z-30 hidden h-10 w-10 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950 text-zinc-300 transition-all hover:border-zinc-600 hover:text-white lg:flex ${
+        className={`no-print fixed left-3 top-3 z-30 hidden h-10 w-10 items-center justify-center rounded-xl border border-zinc-800 light:border-zinc-200 bg-zinc-950 light:bg-white text-zinc-300 light:text-zinc-600 transition-all hover:border-zinc-600 hover:text-white light:hover:border-zinc-400 light:hover:text-zinc-900 lg:flex ${
           isOpen ? "pointer-events-none -translate-x-14 opacity-0" : "translate-x-0 opacity-100"
         }`}
         aria-label="Open history sidebar"
@@ -71,28 +72,29 @@ export function HistorySidebar({
       </button>
 
       <aside
-        className={`no-print fixed left-0 top-0 z-20 hidden h-screen w-72 border-r border-zinc-800 bg-zinc-950/95 px-3 py-4 transition-transform duration-300 lg:flex lg:flex-col ${
+        className={`no-print fixed left-0 top-0 z-20 hidden h-screen w-72 border-r border-zinc-800 light:border-zinc-200 bg-zinc-950/95 light:bg-white/95 px-3 py-4 transition-transform duration-300 lg:flex lg:flex-col ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <div className="mb-4 flex items-center justify-between px-2">
-          <Link href="/" className="text-sm font-semibold text-white">
+          <Link href="/" className="text-sm font-semibold text-white light:text-zinc-900">
             Verdict
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {items.length > 0 && (
               <button
                 type="button"
                 onClick={clearComparisonHistory}
-                className="text-xs text-zinc-500 transition-colors hover:text-zinc-300"
+                className="text-xs text-zinc-500 transition-colors hover:text-zinc-300 light:hover:text-zinc-700"
               >
                 Clear
               </button>
             )}
+            <ThemeToggle />
             <button
               type="button"
               onClick={onClose}
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-900 hover:text-zinc-200"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-900 light:hover:bg-zinc-100 hover:text-zinc-200 light:hover:text-zinc-700"
               aria-label="Close history sidebar"
             >
               ×
@@ -102,7 +104,7 @@ export function HistorySidebar({
 
         <Link
           href="/"
-          className="mb-4 rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-900"
+          className="mb-4 rounded-lg border border-zinc-800 light:border-zinc-200 px-3 py-2 text-sm text-zinc-200 light:text-zinc-700 transition-colors hover:border-zinc-600 light:hover:border-zinc-400 hover:bg-zinc-900 light:hover:bg-zinc-50"
         >
           New comparison
         </Link>
@@ -121,23 +123,23 @@ export function HistorySidebar({
           )}
         </div>
 
-        <div className="relative border-t border-zinc-800 pt-3">
+        <div className="relative border-t border-zinc-800 light:border-zinc-200 pt-3">
           {profileOpen && (
-            <div className="absolute bottom-14 left-0 right-0 z-30 rounded-2xl border border-zinc-800 bg-zinc-950 p-2 shadow-2xl shadow-black/40">
+            <div className="absolute bottom-14 left-0 right-0 z-30 rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-950 light:bg-white p-2 shadow-2xl shadow-black/20">
               <div className="mb-2 flex items-center gap-3 rounded-xl px-2 py-2">
                 <Avatar name={profileName} />
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-white">{profileName}</div>
+                  <div className="truncate text-sm font-medium text-white light:text-zinc-900">{profileName}</div>
                   <div className="text-xs text-zinc-500">Profile</div>
                 </div>
               </div>
-              <div className="h-px bg-zinc-800" />
+              <div className="h-px bg-zinc-800 light:bg-zinc-200" />
               <Link
                 href="/profile"
                 onClick={() => setProfileOpen(false)}
-                className="mt-2 flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-zinc-200 transition-colors hover:bg-zinc-900"
+                className="mt-2 flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-zinc-200 light:text-zinc-700 transition-colors hover:bg-zinc-900 light:hover:bg-zinc-50"
               >
-                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-zinc-600 text-xs">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-zinc-600 light:border-zinc-300 text-xs">
                   i
                 </span>
                 Profile
@@ -147,7 +149,7 @@ export function HistorySidebar({
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-zinc-500"
                 disabled
               >
-                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-zinc-700 text-xs">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-zinc-700 light:border-zinc-300 text-xs">
                   ⚙
                 </span>
                 Settings
@@ -158,13 +160,13 @@ export function HistorySidebar({
           <button
             type="button"
             onClick={() => setProfileOpen((current) => !current)}
-            className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-zinc-900"
+            className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-zinc-900 light:hover:bg-zinc-50"
             aria-expanded={profileOpen}
             aria-label="Open profile menu"
           >
             <Avatar name={profileName} />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-zinc-100">{profileName}</div>
+              <div className="truncate text-sm font-medium text-zinc-100 light:text-zinc-800">{profileName}</div>
               <div className="text-xs text-zinc-500">Profile</div>
             </div>
             <span className="text-lg text-zinc-500">›</span>
@@ -195,10 +197,10 @@ function HistoryRow({ item }: { item: ComparisonHistoryItem }) {
   return (
     <Link
       href={item.href}
-      className="block rounded-lg px-2 py-2 text-sm transition-colors hover:bg-zinc-900"
+      className="block rounded-lg px-2 py-2 text-sm transition-colors hover:bg-zinc-900 light:hover:bg-zinc-50"
       title={item.title}
     >
-      <div className="truncate text-zinc-200">{item.title}</div>
+      <div className="truncate text-zinc-200 light:text-zinc-700">{item.title}</div>
       <div className="mt-1 flex items-center justify-between gap-2 text-xs text-zinc-500">
         <span>{item.status === "results" ? "Results" : "Clarify"}</span>
         <time dateTime={item.updatedAt}>{formatTime(item.updatedAt)}</time>

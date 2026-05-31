@@ -1,7 +1,5 @@
-import { HomeClient } from "./home-client";
+import { LandingSequence } from "@/components/landing/landing-sequence";
 
-export const dynamic = "force-dynamic";
-
-export default function HomePage() {
-  return <HomeClient />;
+export default function Page() {
+  return <LandingSequence />;
 }

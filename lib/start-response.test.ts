@@ -35,7 +35,8 @@ describe("start comparability", () => {
 
     expect(prompt.instructions.join("\n")).toContain("comparability");
     expect(prompt.instructions.join("\n")).toContain("Do NOT invent a shared category");
-    expect(prompt.instructions.join("\n")).toContain("criteria (array), questions (array)");
+    expect(prompt.instructions.join("\n")).toContain('"criteria"');
+    expect(prompt.instructions.join("\n")).toContain('"questions"');
   });
 
   it("adds force-compare instructions when the buyer continues after a warning", () => {

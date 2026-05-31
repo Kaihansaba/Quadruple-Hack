@@ -7,6 +7,7 @@ import { upsertComparisonHistory } from "@/lib/comparison-history";
 import type { DocumentPage, StartResult } from "@/lib/api-types";
 import { saveSessionData } from "@/lib/session-data";
 import { formatIncomparableMessage } from "@/lib/start-response";
+import { useColorScheme } from "@/lib/use-color-scheme";
 import BoxLoader from "@/components/ui/box-loader";
 import LightRays from "@/components/ui/light-rays";
 import ProductLogo from "@/components/ui/product-logo";
@@ -94,6 +95,7 @@ function productDocuments(products: Product[]): StartDocument[] {
 
 export function HomeClient() {
   const router = useRouter();
+  const colorScheme = useColorScheme();
   const [products, setProducts] = useState<Product[]>([]);
   const [draft, setDraft] = useState<Product>(EMPTY_DRAFT);
   const [loading, setLoading] = useState(false);
@@ -345,7 +347,9 @@ export function HomeClient() {
         <h1
           className="mb-8 max-w-2xl text-center text-4xl font-bold leading-tight tracking-tight sm:text-5xl"
           style={{
-            background: "linear-gradient(to bottom, #ffffff 0%, #a1a1aa 100%)",
+            background: colorScheme === "light"
+              ? "linear-gradient(to bottom, #09090b 0%, #52525b 100%)"
+              : "linear-gradient(to bottom, #ffffff 0%, #a1a1aa 100%)",
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
             backgroundClip: "text"
@@ -396,7 +400,7 @@ export function HomeClient() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
-            className="w-full rounded-2xl border border-white/10 bg-white/[0.04] p-5 shadow-[0_8px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl"
+            className="w-full rounded-2xl border border-white/10 light:border-zinc-200 bg-white/[0.04] light:bg-white p-5 shadow-[0_8px_40px_rgba(0,0,0,0.4)] light:shadow-sm backdrop-blur-xl"
           >
             <div className="border-b border-white/10 pb-4">
               <label htmlFor="product-name" className="mb-2 block text-xs font-medium uppercase tracking-wide text-zinc-500">
@@ -410,7 +414,7 @@ export function HomeClient() {
                 onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
                 placeholder="e.g. Salesforce"
                 disabled={loading}
-                className="w-full bg-transparent text-base text-white outline-none placeholder:text-zinc-500"
+                className="w-full bg-transparent text-base text-white light:text-zinc-900 outline-none placeholder:text-zinc-500"
               />
             </div>
 
@@ -425,7 +429,7 @@ export function HomeClient() {
                 placeholder="e.g. Our sales team already uses it"
                 rows={2}
                 disabled={loading}
-                className="w-full resize-none bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+                className="w-full resize-none bg-transparent text-sm text-white light:text-zinc-900 outline-none placeholder:text-zinc-500"
               />
             </div>
 
@@ -434,7 +438,7 @@ export function HomeClient() {
                 {draft.files.map((attachment, index) => (
                   <span
                     key={attachment.id}
-                    className="flex max-w-48 items-center gap-1 rounded-full bg-zinc-700 px-2.5 py-1 text-xs text-zinc-300"
+                    className="flex max-w-48 items-center gap-1 rounded-full bg-zinc-700 light:bg-zinc-100 px-2.5 py-1 text-xs text-zinc-300 light:text-zinc-600"
                   >
                     {attachment.status === "parsing" && (
                       <span className="h-3 w-3 shrink-0 rounded-full border-2 border-zinc-500 border-t-zinc-200 animate-spin" />
@@ -468,7 +472,7 @@ export function HomeClient() {
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={loading}
-                  className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-zinc-300 transition-colors hover:border-white/25 hover:text-white disabled:opacity-40"
+                  className="flex items-center gap-2 rounded-xl border border-white/10 light:border-zinc-200 bg-white/[0.02] light:bg-zinc-50 px-3 py-2 text-sm text-zinc-300 light:text-zinc-600 transition-colors hover:border-white/25 light:hover:border-zinc-400 hover:text-white light:hover:text-zinc-900 disabled:opacity-40"
                 >
                   <PaperclipIcon />
                   Attach
@@ -496,7 +500,7 @@ export function HomeClient() {
                 type="button"
                 onClick={() => useSuggestion(suggestion)}
                 disabled={loading}
-                className="rounded-full border border-white/10 bg-white/[0.02] px-3 py-1.5 text-sm text-zinc-400 backdrop-blur-md transition-colors hover:border-teal-400/40 hover:text-teal-200 disabled:opacity-40"
+                className="rounded-full border border-white/10 light:border-zinc-200 bg-white/[0.02] light:bg-zinc-50 px-3 py-1.5 text-sm text-zinc-400 light:text-zinc-600 backdrop-blur-md transition-colors hover:border-teal-400/40 hover:text-teal-200 light:hover:text-teal-700 disabled:opacity-40"
               >
                 {suggestion}
               </button>
@@ -519,7 +523,7 @@ export function HomeClient() {
             className={`relative w-full rounded-2xl py-3 text-base font-semibold transition-colors ${
               canCompare
                 ? "bg-teal-400 text-[#062925] shadow-[0_8px_30px_rgba(45,212,191,0.25)] hover:bg-teal-300"
-                : "cursor-not-allowed border border-white/10 bg-white/[0.04] text-zinc-500 backdrop-blur-md"
+                : "cursor-not-allowed border border-white/10 light:border-zinc-200 bg-white/[0.04] light:bg-zinc-100 text-zinc-500 backdrop-blur-md"
             }`}
           >
             {loading && (
@@ -645,11 +649,11 @@ function ProductCard({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -12, scale: 0.95 }}
       transition={{ type: "spring", stiffness: 380, damping: 28 }}
-      className={`relative h-24 w-52 shrink-0 cursor-pointer rounded-xl border p-4 backdrop-blur-md ${
+      className={`relative h-24 w-52 shrink-0 cursor-pointer rounded-xl border p-4 backdrop-blur-md transition-shadow ${
         isEditing
           ? "border-teal-400 bg-teal-400/15 shadow-[0_0_0_1px_rgba(45,212,191,0.18),0_0_34px_rgba(45,212,191,0.2)]"
-          : "border-white/10 bg-white/[0.04]"
-      } hover:border-white/20 hover:shadow-[0_0_24px_rgba(45,212,191,0.12)] transition-shadow`}
+          : "border-white/10 light:border-zinc-200 bg-white/[0.04] light:bg-white"
+      } hover:border-white/20 light:hover:border-zinc-300 hover:shadow-[0_0_24px_rgba(45,212,191,0.12)]`}
       title="Double click to edit"
     >
       {isEditing && (
@@ -668,9 +672,9 @@ function ProductCard({
       <div className={`pr-7 ${isEditing ? "pt-5" : ""}`}>
         <div className="mb-1 flex items-center gap-2">
           <ProductLogo name={product.name} size={24} />
-          <p className="truncate text-sm font-medium text-white">{product.name}</p>
+          <p className="truncate text-sm font-medium text-white light:text-zinc-900">{product.name}</p>
         </div>
-        <p className="mt-1 overflow-hidden text-xs leading-5 text-zinc-400 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+        <p className="mt-1 overflow-hidden text-xs leading-5 text-zinc-400 light:text-zinc-500 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
           {product.description || "No note added"}
         </p>
         {product.files.length > 0 && (

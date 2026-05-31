@@ -169,11 +169,11 @@ export default function ClarifyPage() {
       {loading && <RunningOverlay products={data.products.map((p) => p.name)} />}
       <main className="min-h-screen px-4 py-10">
       <div className="mx-auto max-w-4xl">
-        <div className="sticky top-0 z-10 -mx-4 mb-8 border-b border-zinc-900 bg-[#0b0f12]/95 px-4 pb-5 pt-1 backdrop-blur">
+        <div className="sticky top-0 z-10 -mx-4 mb-8 border-b border-zinc-900 light:border-zinc-200 bg-[#0b0f12]/95 light:bg-white/95 px-4 pb-5 pt-1 backdrop-blur">
           <p className="mb-2 text-sm text-zinc-500">Step 2 of 3</p>
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-white">Tune the decision</h1>
+              <h1 className="text-2xl font-bold text-white light:text-zinc-900">Tune the decision</h1>
               <p className="mt-1 text-sm text-zinc-500">Answer the questions below, then analyze.</p>
             </div>
             <div className="rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1.5 text-xs text-teal-300">
@@ -185,7 +185,7 @@ export default function ClarifyPage() {
             {data.products.map((product, index) => (
               <div
                 key={`${product.name}-${index}`}
-                className="flex h-10 shrink-0 items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 pl-1.5 pr-3 text-sm text-zinc-200"
+                className="flex h-10 shrink-0 items-center gap-2 rounded-full border border-zinc-700 light:border-zinc-200 bg-zinc-900 light:bg-zinc-50 pl-1.5 pr-3 text-sm text-zinc-200 light:text-zinc-700"
               >
                 <ProductLogo name={product.name} size={28} />
                 <span className="max-w-36 truncate">{product.name}</span>
@@ -202,7 +202,7 @@ export default function ClarifyPage() {
               </span>
               <span>{answeredCount} selected</span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
+            <div className="h-2 overflow-hidden rounded-full bg-zinc-800 light:bg-zinc-200">
               <div
                 className="h-full rounded-full bg-teal-500 transition-all duration-300"
                 style={{ width: `${progress}%` }}
@@ -219,7 +219,7 @@ export default function ClarifyPage() {
                 exit={{ opacity: 0, x: -32 }}
                 transition={{ duration: 0.22, ease: "easeOut" }}
               >
-                <label htmlFor="extra-context" className="block text-xl font-semibold text-white">
+                <label htmlFor="extra-context" className="block text-xl font-semibold text-white light:text-zinc-900">
                   Anything else?
                 </label>
                 <p className="mt-2 text-sm text-zinc-500">
@@ -231,7 +231,7 @@ export default function ClarifyPage() {
                   onChange={(event) => setExtraContext(event.target.value)}
                   rows={4}
                   placeholder="e.g. We need something non-technical managers can maintain."
-                  className="mt-5 w-full resize-none rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-zinc-500"
+                  className="mt-5 w-full resize-none rounded-2xl border border-zinc-700 light:border-zinc-200 bg-zinc-950 light:bg-zinc-50 px-4 py-3 text-sm text-white light:text-zinc-900 outline-none transition-colors placeholder:text-zinc-600 focus:border-zinc-500 light:focus:border-zinc-400"
                 />
               </motion.div>
             ) : activeQuestion ? (
@@ -358,21 +358,21 @@ function QuestionCard({
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5 sm:p-6">
-      <p className="mb-5 text-base font-medium leading-7 text-zinc-100">{q.question}</p>
+    <div className="rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-900/50 light:bg-white p-5 sm:p-6">
+      <p className="mb-5 text-base font-medium leading-7 text-zinc-100 light:text-zinc-800">{q.question}</p>
       {isPerProduct ? (
         <div className="flex flex-col gap-3">
           {targetProducts.map((productName) => {
             const value = getPerProductValues()[productName] ?? "";
             return (
               <div key={productName} className="flex items-center gap-3">
-                <span className="w-32 shrink-0 truncate text-sm text-zinc-400">{productName}</span>
+                <span className="w-32 shrink-0 truncate text-sm text-zinc-400 light:text-zinc-500">{productName}</span>
                 <input
                   type="text"
                   value={value}
                   onChange={(event) => handlePerProductChange(productName, event.target.value)}
                   placeholder="e.g. $75/user/mo"
-                  className="flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-zinc-500"
+                  className="flex-1 rounded-xl border border-zinc-700 light:border-zinc-200 bg-zinc-900 light:bg-zinc-50 px-3 py-2.5 text-sm text-white light:text-zinc-900 outline-none transition-colors placeholder:text-zinc-600 focus:border-zinc-500 light:focus:border-zinc-400"
                 />
               </div>
             );
@@ -389,12 +389,12 @@ function QuestionCard({
                   onClick={() => onSelect(q.id, a.label)}
                   className={`flex min-h-11 items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition-all ${
                     isSelected
-                      ? "border-teal-500 bg-teal-500/15 text-white"
-                      : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                      ? "border-teal-500 bg-teal-500/15 text-white light:text-teal-900"
+                      : "border-zinc-700 light:border-zinc-200 bg-zinc-900 light:bg-zinc-50 text-zinc-400 light:text-zinc-600 hover:border-zinc-500 light:hover:border-zinc-400 hover:text-zinc-200 light:hover:text-zinc-800"
                   }`}
                 >
                   <span>{a.label}</span>
-                  <span className={`ml-3 h-4 w-4 rounded-full border ${isSelected ? "border-teal-400 bg-teal-400" : "border-zinc-600"}`} />
+                  <span className={`ml-3 h-4 w-4 rounded-full border ${isSelected ? "border-teal-400 bg-teal-400" : "border-zinc-600 light:border-zinc-300"}`} />
                 </button>
               );
             })}
@@ -406,10 +406,10 @@ function QuestionCard({
               value={isCustom ? selected : ""}
               onChange={(event) => onSelect(q.id, event.target.value)}
               placeholder="Other..."
-              className={`w-full rounded-xl border px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 ${
+              className={`w-full rounded-xl border px-3 py-2.5 text-sm text-white light:text-zinc-900 outline-none transition-colors placeholder:text-zinc-600 ${
                 isCustom
                   ? "border-teal-500 bg-teal-500/10"
-                  : "border-zinc-700 bg-zinc-900 focus:border-zinc-500"
+                  : "border-zinc-700 light:border-zinc-200 bg-zinc-900 light:bg-zinc-50 focus:border-zinc-500 light:focus:border-zinc-400"
               }`}
             />
           </div>
