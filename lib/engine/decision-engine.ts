@@ -13,7 +13,8 @@ const SOURCE_WEIGHTS: Record<SourceType, number> = {
   spec: 1,
   expert_review: 0.9,
   user_review: 0.65,
-  vendor_claim: 0.45
+  vendor_claim: 0.45,
+  uploaded_document: 0.45
 };
 
 const DISAGREEMENT_THRESHOLD = 0.2;
