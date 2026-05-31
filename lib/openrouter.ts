@@ -1,13 +1,13 @@
 const BASE = "https://openrouter.ai/api/v1";
 
 // Call 1 & interpret: no web search needed — reliable JSON output
-const MODEL_JSON = process.env.OPENROUTER_MODEL_JSON ?? "anthropic/claude-sonnet-4-5";
+const MODEL_JSON = process.env.OPENROUTER_MODEL_JSON ?? "anthropic/claude-opus-4-5";
 // Call 2: needs live web evidence — :online suffix enables OpenRouter web plugin
-const MODEL_WEB = process.env.OPENROUTER_MODEL_EXTRACT ?? "anthropic/claude-sonnet-4-5:online";
+const MODEL_WEB = process.env.OPENROUTER_MODEL_EXTRACT ?? "anthropic/claude-opus-4-5:online";
 // Call 3 narration: no JSON, no web
-const MODEL_NARRATE = process.env.OPENROUTER_MODEL_NARRATE ?? "anthropic/claude-haiku-4-5";
+const MODEL_NARRATE = process.env.OPENROUTER_MODEL_NARRATE ?? "anthropic/claude-opus-4-5";
 // Pre-search: grounded product research for Call 1 criteria/question setup
-const MODEL_SEARCH = process.env.OPENROUTER_MODEL_SEARCH ?? "perplexity/sonar-pro";
+const MODEL_SEARCH = process.env.OPENROUTER_MODEL_SEARCH ?? "perplexity/sonar-pro-search";
 
 type Message = { role: "system" | "user" | "assistant"; content: string };
 
