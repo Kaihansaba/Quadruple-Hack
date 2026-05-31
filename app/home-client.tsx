@@ -116,17 +116,20 @@ export function HomeClient() {
     setFirstName(readProfileFirstName());
   }, []);
 
-  async function submit() {
+  async function submit(forceCompare = false) {
     if (!canCompare) return;
     setLoading(true);
     setError(null);
+    if (forceCompare) {
+      setIncomparableMessage(null);
+    }
 
     try {
       const documents = productDocuments(products);
       const body =
         documents.length > 0
-          ? { query: products.map((product) => product.name).join(" vs "), documents }
-          : { query: products.map((product) => product.name).join(" vs ") };
+          ? { query: products.map((product) => product.name).join(" vs "), documents, forceCompare }
+          : { query: products.map((product) => product.name).join(" vs "), forceCompare };
 
       const res = await fetch("/api/comparisons/start", {
         method: "POST",
@@ -323,6 +326,7 @@ export function HomeClient() {
         <IncomparablePage
           message={incomparableMessage}
           products={products.map((product) => product.name)}
+          onContinue={() => submit(true)}
           onBack={() => {
             setIncomparableMessage(null);
             setError(null);
@@ -506,7 +510,7 @@ export function HomeClient() {
         <div className="mx-auto max-w-3xl space-y-2">
           <motion.button
             type="button"
-            onClick={submit}
+            onClick={() => submit()}
             disabled={!canCompare}
             whileHover={canCompare ? { scale: 1.015 } : {}}
             whileTap={canCompare ? { scale: 0.97 } : {}}
@@ -538,10 +542,12 @@ export function HomeClient() {
 function IncomparablePage({
   message,
   products,
+  onContinue,
   onBack
 }: {
   message: string;
   products: string[];
+  onContinue: () => void;
   onBack: () => void;
 }) {
   return (
@@ -577,8 +583,15 @@ function IncomparablePage({
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <button
             type="button"
+            onClick={onContinue}
+            className="rounded-xl bg-teal-500 px-5 py-3 text-sm font-semibold text-[#062925] transition-colors hover:bg-teal-300"
+          >
+            Continue anyway
+          </button>
+          <button
+            type="button"
             onClick={onBack}
-            className="rounded-xl bg-green-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-green-500"
+            className="rounded-xl border border-zinc-700 px-5 py-3 text-sm font-semibold text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-900"
           >
             Back to home
           </button>
