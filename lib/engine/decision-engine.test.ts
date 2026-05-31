@@ -133,15 +133,23 @@ describe("decision engine", () => {
   it("reports near ties when top two active products are within five points", () => {
     const result = runDecisionEngine({
       ...demoComparison,
+      // Equal weighting balances Nimbus's price/admin edge against LedgerFlow's
+      // integration/support edge, landing the active pair within five points.
       criteria: demoComparison.criteria.map((criterion) =>
-        criterion.id === "crit_price"
-          ? { ...criterion, weight: 0.05 }
-          : criterion.id === "crit_support"
-            ? { ...criterion, weight: 0.45 }
-            : criterion
+        criterion.type === "soft" ? { ...criterion, weight: 0.25 } : criterion
       )
     });
 
     expect(result.nearTie).toBe(true);
+  });
+
+  it("never forces a numeric criterion to a zero score (ratio-to-best)", () => {
+    const result = runDecisionEngine(demoComparison);
+    const priceCells = result.cells.filter((cell) => cell.criterionId === "crit_price");
+
+    expect(priceCells).not.toHaveLength(0);
+    for (const cell of priceCells) {
+      expect(cell.normalizedValue).toBeGreaterThan(0);
+    }
   });
 });
