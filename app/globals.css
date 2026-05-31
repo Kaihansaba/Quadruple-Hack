@@ -57,3 +57,116 @@
     left: 18rem;
   }
 }
+
+/* ── Box loader (components/ui/box-loader.tsx) ──────────────────────────── */
+.boxes {
+  --size: 32px;
+  --duration: 800ms;
+  height: calc(var(--size) * 2);
+  width: calc(var(--size) * 3);
+  position: relative;
+  transform-style: preserve-3d;
+  transform-origin: 50% 50%;
+  transform: rotateX(60deg) rotateZ(45deg) rotateY(0deg) translateZ(0px);
+}
+
+.boxes .box {
+  width: var(--size);
+  height: var(--size);
+  top: 0;
+  left: 0;
+  position: absolute;
+  transform-style: preserve-3d;
+}
+
+.boxes .box.box-1 {
+  transform: translate(100%, 0);
+  animation: box1 var(--duration) linear infinite;
+}
+.boxes .box.box-2 {
+  transform: translate(0, 100%);
+  animation: box2 var(--duration) linear infinite;
+}
+.boxes .box.box-3 {
+  transform: translate(100%, 100%);
+  animation: box3 var(--duration) linear infinite;
+}
+.boxes .box.box-4 {
+  transform: translate(200%, 0);
+  animation: box4 var(--duration) linear infinite;
+}
+
+.boxes .box > div {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
+}
+
+/* Front face */
+.boxes .box > div.face-front {
+  background: #22c55e;
+  top: 0;
+  left: 0;
+  transform: translateZ(calc(var(--size) / 2));
+}
+/* Right face — darker green for depth */
+.boxes .box > div.face-right {
+  background: #15803d;
+  right: 0;
+  transform: rotateY(90deg) translateZ(calc(var(--size) / 2));
+}
+/* Top face — brightest green */
+.boxes .box > div.face-top {
+  background: #4ade80;
+  transform: rotateX(-90deg) translateZ(calc(var(--size) / 2));
+}
+/* Back face — floor shadow plane pushed behind the stack */
+.boxes .box > div.face-back {
+  background: #0a2417;
+  top: 0;
+  left: 0;
+  transform: translateZ(calc(var(--size) * 3 * -1));
+}
+
+@keyframes box1 {
+  0%, 50% {
+    transform: translate(100%, 0);
+  }
+  100% {
+    transform: translate(200%, 0);
+  }
+}
+@keyframes box2 {
+  0% {
+    transform: translate(0, 100%);
+  }
+  50% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(100%, 0);
+  }
+}
+@keyframes box3 {
+  0%, 50% {
+    transform: translate(100%, 100%);
+  }
+  100% {
+    transform: translate(0, 100%);
+  }
+}
+@keyframes box4 {
+  0% {
+    transform: translate(200%, 0);
+  }
+  50% {
+    transform: translate(200%, 100%);
+  }
+  100% {
+    transform: translate(100%, 100%);
+  }
+}

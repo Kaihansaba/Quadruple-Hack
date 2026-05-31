@@ -28,6 +28,12 @@ interface OnboardCardProps {
   steps?: string[];
   /** Milliseconds the active step spends loading before advancing. */
   stepDuration?: number;
+  /**
+   * Milliseconds the final step's bar takes to crawl. It eases toward (but
+   * never reaches) full, so it reads as "still working" while we wait on the
+   * real response, instead of completing early and sitting at 100%.
+   */
+  finalStepDuration?: number;
   /** Fired once the final step is reached (the loader then holds, spinning). */
   onComplete?: () => void;
   className?: string;
@@ -36,6 +42,7 @@ interface OnboardCardProps {
 const OnboardCard = ({
   steps = DEFAULT_STEPS,
   stepDuration = 1400,
+  finalStepDuration = 12000,
   onComplete,
   className,
 }: OnboardCardProps) => {
@@ -96,8 +103,13 @@ const OnboardCard = ({
                     key={current}
                     className="h-full bg-green-500"
                     initial={{ width: 0 }}
-                    animate={{ width: "100%" }}
-                    transition={{ duration: stepDuration / 1000, ease: "easeInOut" }}
+                    // Final step crawls toward ~90% slowly; earlier steps fill fully then advance.
+                    animate={{ width: current === lastIndex ? "90%" : "100%" }}
+                    transition={{
+                      duration:
+                        (current === lastIndex ? finalStepDuration : stepDuration) / 1000,
+                      ease: current === lastIndex ? "easeOut" : "easeInOut",
+                    }}
                   />
                 )}
               </div>
