@@ -115,8 +115,9 @@ Criteria — 3 to 6 items
 Questions — 4 to 6 items (excluding the price question below)
 - Fields per item: id, category ("priorities" | "dealbreakers" | "clarification"),
   question (string), suggested_answers (array of { label, from_profile }).
-- Collectively cover: priorities (these drive the soft-criteria weights),
-  dealbreakers (hard requirements), and category-specific clarifications.
+- Collectively cover: priorities (these drive the soft-criteria weights) and
+  category-specific clarifications. Include dealbreakers only when the buyer
+  explicitly has compliance or other must-have requirements.
   Do NOT include a price question here.
 - suggested_answers: 2 to 4 per question. Labels must be short (under 6 words).
 - Do NOT generate any catch-all, open-ended, or "Anything else?" question.
