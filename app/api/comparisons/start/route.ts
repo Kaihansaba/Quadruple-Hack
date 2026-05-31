@@ -28,7 +28,11 @@ export async function POST(req: NextRequest) {
       },
       { role: "user", content: prompt }
     ]);
-    parsed = sanitizeCall1OutputForProfile(JSON.parse(raw) as Call1Output, profile);
+    const llmOut = JSON.parse(raw);
+    if (llmOut.error) {
+      return NextResponse.json({ error: llmOut.error }, { status: 422 });
+    }
+    parsed = sanitizeCall1OutputForProfile(llmOut as Call1Output, profile);
   } catch {
     return NextResponse.json({ error: "LLM returned malformed JSON. Please try again." }, { status: 502 });
   }
