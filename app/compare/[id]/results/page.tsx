@@ -37,7 +37,7 @@ import type { Call1Output } from "@/lib/prompts";
 
 type Product = { id: string; name: string };
 
-const COLORS = ["#2d71bf", "#3b82f6", "#f59e0b", "#a855f7", "#10b981"];
+const COLORS = ["#2d71bf", "#ef4444", "#f59e0b", "#a855f7", "#10b981"];
 const MIN_ROBUSTNESS_BAND = 0.15;
 const MAX_ROBUSTNESS_BAND = 0.6;
 const DEFAULT_PRIORITY_FIRMNESS = 44;
