@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { structuredCall } from "@/lib/openrouter";
-import { call1Prompt, type Call1Output } from "@/lib/prompts";
+import { structuredCall, perplexitySearchCall } from "@/lib/openrouter";
+import { call1Prompt, searchPrompt, type Call1Output } from "@/lib/prompts";
 import { sanitizeCall1OutputForProfile } from "@/lib/criteria-sanitizer";
 import { DEMO_PROFILE } from "@/lib/demo-profile";
 import { parseProducts } from "@/lib/product-parser";
@@ -16,7 +16,17 @@ export async function POST(req: NextRequest) {
   }
 
   const profile = DEMO_PROFILE;
-  const prompt = call1Prompt(products, profile);
+
+  let searchContext: string | undefined;
+  try {
+    searchContext = await perplexitySearchCall(searchPrompt(products));
+    console.log("[Perplexity search result]\n", searchContext);
+  } catch (err) {
+    console.error("[Perplexity search failed]", err);
+    // fall back to no search context — Call 1 proceeds with parametric knowledge
+  }
+
+  const prompt = call1Prompt(products, profile, searchContext);
   // let parsed: Call1Output;
   let parsed: any;
   try {

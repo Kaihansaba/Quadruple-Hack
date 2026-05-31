@@ -39,7 +39,16 @@ export type Call2Output = {
   proposed_weights: Record<string, number>;
 };
 
-export function call1Prompt(products: string[], profile: CompanyProfile): string {
+export function searchPrompt(products: string[]): string {
+  return `For each of the following products: ${products.join(", ")} — provide:
+1. Product category and primary use case
+2. Pricing: list all public pricing tiers (per user/mo, flat fee, etc.)
+3. Top 5 key features or differentiators
+4. Typical company size / target customer
+Be concise and factual. Include pricing figures where available.`;
+}
+
+export function call1Prompt(products: string[], profile: CompanyProfile, searchContext?: string): string {
   return JSON.stringify({
     task: "Generate a unified criteria set and clarifying questions for this B2B product comparison.",
     products,
@@ -54,8 +63,7 @@ export function call1Prompt(products: string[], profile: CompanyProfile): string
       default_weights: profile.default_weights
     },
     instructions: [
-      `
-      You are an expert purchasing decision-making assistant. Your job is to analyze a set
+      `${searchContext ? `<product_research>\n${searchContext}\n</product_research>\n\n` : ""}You are an expert purchasing decision-making assistant. Your job is to analyze a set
 of candidate products together with the buyer's company profile, then produce
 (a) scoring criteria and (b) clarifying questions that help the buyer reach a
 confident purchasing decision.
@@ -85,16 +93,27 @@ If any precondition fails, return ONLY: {"error": "<short reason>"} and nothing 
 </preconditions>
 
 <process>
-1. Confirm the products share a category/industry and identify what that category is.
-2. Identify the key differentiators between the products.
-3. Derive the criteria buyers in this category typically weigh.
-4. Pricing: Always emit exactly one price clarification question (see Price Question rule
-   below). This question is separate from the 4–6 main questions and is always required,
-   regardless of whether prices are provided or not.
+1. If <product_research> is present, extract for each product:
+   (a) confirmed pricing (exact tiers/figures if available, or "free", "unknown")
+   (b) top features and differentiators
+   (c) product category
+   Treat all extracted facts as ground truth — do not ask about them.
+2. Confirm the products share a category/industry.
+3. Identify key differentiators NOT already covered by the research.
+4. Pricing: emit a price question ONLY if one or more products have unknown or
+   unconfirmed pricing from the research. If all products' pricing is established,
+   omit the price question entirely.
 5. Generate criteria and questions per the rules below.
 </process>
 
 <rules>
+Research (when <product_research> is present)
+- Extracted facts are ground truth. Do not ask questions whose answers are already
+  in the research.
+- When generating suggested_answers, pull specific values from the research
+  (e.g. actual feature names, real pricing tiers) instead of generic labels.
+- If a suggested answer comes from the research, set from_profile: false.
+
 General
 - Every criterion and question must be tailored to the buyer's profile: sector,
   tech_stack, compliance_reqs, and preferred_suppliers.
@@ -123,12 +142,11 @@ Questions — 4 to 6 items (excluding the price question below)
 - Do NOT generate any catch-all, open-ended, or "Anything else?" question.
   The UI already provides this step separately.
 
-Price Question — exactly 1 mandatory item (in addition to the 4–6 above)
-- Always emit exactly one extra question with category "clarification" asking the buyer
-  to provide the price for each product being compared.
+Price Question — 0 or 1 item
+- Include ONLY if one or more products have pricing that is unknown or unconfirmed
+  in <product_research>. If pricing is known for all products, omit this question.
+- When included: category "clarification", input_type "per_product", suggested_answers [].
 - The question MUST name ALL of these products: ${products.join(", ")}. Example: "What is the price for ${products.join(" / ")} as quoted to your organization per year?"
-- Set input_type: "per_product" on this question (the UI renders a free-text input for the buyer to type prices).
-- Set suggested_answers to an empty array [] for this question.
 - This question is optional for the buyer to answer (it can be skipped).
 </rules>
 
@@ -146,7 +164,7 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary — matchi
       "suggested_answers": [ { "label": string, "from_profile": boolean } ] }
   ]
 }
-Note: the "questions" array will contain 5–7 items total: 4–6 main questions + exactly 1 price question.
+Note: the "questions" array will contain 4–7 items total: 4–6 main questions + 0 or 1 price question depending on research.
 On a failed precondition, return ONLY: {"error": string}
 </output>
 `

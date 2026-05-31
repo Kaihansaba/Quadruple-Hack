@@ -6,6 +6,8 @@ const MODEL_JSON = process.env.OPENROUTER_MODEL_JSON ?? "anthropic/claude-sonnet
 const MODEL_WEB = process.env.OPENROUTER_MODEL_EXTRACT ?? "anthropic/claude-sonnet-4-5:online";
 // Call 3 narration: no JSON, no web
 const MODEL_NARRATE = process.env.OPENROUTER_MODEL_NARRATE ?? "anthropic/claude-haiku-4-5";
+// Pre-search: Perplexity Sonar Pro for grounded product research
+const MODEL_SEARCH = process.env.OPENROUTER_MODEL_SEARCH ?? "perplexity/sonar-pro";
 
 type Message = { role: "system" | "user" | "assistant"; content: string };
 
@@ -67,4 +69,9 @@ export async function narrateCall(messages: Message[]): Promise<string> {
 export async function jsonCall(messages: Message[]): Promise<string> {
   const raw = await chat(MODEL_JSON, messages, true);
   return stripFences(raw);
+}
+
+// Pre-search: grounded product research via Perplexity Sonar Pro
+export async function perplexitySearchCall(query: string): Promise<string> {
+  return chat(MODEL_SEARCH, [{ role: "user", content: query }], false);
 }
