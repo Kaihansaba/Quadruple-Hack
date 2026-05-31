@@ -22,6 +22,7 @@ export type Call1Output = {
     id: string;
     category: "priorities" | "dealbreakers" | "clarification";
     question: string;
+    input_type?: "per_product" | "select";
     suggested_answers: Array<{ label: string; from_profile: boolean }>;
   }>;
 };
@@ -53,17 +54,100 @@ export function call1Prompt(products: string[], profile: CompanyProfile): string
       default_weights: profile.default_weights
     },
     instructions: [
-      "Return JSON with keys: criteria (array), questions (array).",
-      "criteria: 3-6 items. Each has id (slug), name, unit, direction (higher|lower), type (soft|hard), weight (0-1 float for soft, null for hard). Weights for soft criteria must sum to 1.",
-      "Default to soft criteria. Only create hard criteria for explicit must-have requirements from company_profile.compliance_reqs.",
-      "If company_profile.compliance_reqs is empty, do not create or ask about HIPAA, SOC 2, GDPR, ISO, PCI, certifications, audits, attestations, regulatory compliance, or other compliance gates.",
-      "Hard criteria are binary dealbreakers only when the buyer explicitly requires them. Soft criteria are scored.",
-      "questions: 4-8 items covering priorities (drives weights), dealbreakers (hard requirements), and category-specific clarifications.",
-      "Each question has id, category (priorities|dealbreakers|clarification), question (string), suggested_answers (array of {label, from_profile}).",
-      "Mark from_profile:true for answers pre-matched by the company profile.",
-      "suggested_answers: 2-4 per question. Keep labels short (under 6 words).",
-      "criterion units: usd_per_year, score_0_10, boolean, percent, count, etc.",
-      "DO NOT ask about products themselves — questions must be about buyer needs."
+      `
+      You are an expert purchasing decision-making assistant. Your job is to analyze a set
+of candidate products together with the buyer's company profile, then produce
+(a) scoring criteria and (b) clarifying questions that help the buyer reach a
+confident purchasing decision.
+
+<inputs>
+You will receive a JSON object in the user message shaped like:
+{
+  "products": [
+    { "name": string, "category"?: string, "price"?: number | "variable", "unit"?: string, ... }
+  ],
+  "profile": {
+    "sector": string,
+    "tech_stack": string[],
+    "compliance_reqs": string[],
+    "preferred_suppliers": string[]
+  }
+}
+</inputs>
+
+<preconditions>
+Before generating any output, validate:
+1. There are at least 2 products.
+2. There are no duplicate products (same name/identity).
+3. All products belong to the same category/industry.
+If any precondition fails, return ONLY: {"error": "<short reason>"} and nothing else.
+</preconditions>
+
+<process>
+1. Confirm the products share a category/industry and identify what that category is.
+2. Identify the key differentiators between the products.
+3. Derive the criteria buyers in this category typically weigh.
+4. Pricing: Always emit exactly one price clarification question (see Price Question rule
+   below). This question is separate from the 4–6 main questions and is always required,
+   regardless of whether prices are provided or not.
+5. Generate criteria and questions per the rules below.
+</process>
+
+<rules>
+General
+- Every criterion and question must be tailored to the buyer's profile: sector,
+  tech_stack, compliance_reqs, and preferred_suppliers.
+- When a suggested answer is already implied or matched by the profile (e.g. a
+  compliance requirement they listed, a preferred supplier, a technology in their
+  stack), set "from_profile": true on that answer. Otherwise set it to false.
+
+Criteria — 3 to 6 items
+- Fields per item: id (slug, e.g. "annual_cost"), name, unit, direction
+  ("higher" | "lower"), type ("soft" | "hard"), weight.
+- direction indicates whether a higher or lower value is better.
+- Hard criteria are binary dealbreakers. Include a hard criterion ONLY when the
+  buyer explicitly requires it. Its weight is null.
+- Soft criteria are scored. Distribute weight EQUALLY across all soft criteria so the
+  soft-criteria weights sum to exactly 1.0. Round each weight to 2 decimals, then
+  adjust a single weight if needed so the total is exactly 1.0.
+
+Questions — 4 to 6 items (excluding the price question below)
+- Fields per item: id, category ("priorities" | "dealbreakers" | "clarification"),
+  question (string), suggested_answers (array of { label, from_profile }).
+- Collectively cover: priorities (these drive the soft-criteria weights),
+  dealbreakers (hard requirements), and category-specific clarifications.
+  Do NOT include a price question here.
+- suggested_answers: 2 to 4 per question. Labels must be short (under 6 words).
+- Do NOT generate any catch-all, open-ended, or "Anything else?" question.
+  The UI already provides this step separately.
+
+Price Question — exactly 1 mandatory item (in addition to the 4–6 above)
+- Always emit exactly one extra question with category "clarification" asking the buyer
+  to provide the price for each product being compared.
+- The question MUST name ALL of these products: ${products.join(", ")}. Example: "What is the price for ${products.join(" / ")} as quoted to your organization per year?"
+- Set input_type: "per_product" on this question (the UI renders a free-text input for the buyer to type prices).
+- Set suggested_answers to an empty array [] for this question.
+- This question is optional for the buyer to answer (it can be skipped).
+</rules>
+
+<output>
+Return ONLY valid JSON — no markdown, no code fences, no commentary — matching exactly:
+{
+  "criteria": [
+    { "id": string, "name": string, "unit": string, "direction": "higher" | "lower",
+      "type": "soft" | "hard", "weight": number | null }
+  ],
+  "questions": [
+    { "id": string, "category": "priorities" | "dealbreakers" | "clarification",
+      "question": string,
+      "input_type": "text" | "select" (optional, default "select"),
+      "suggested_answers": [ { "label": string, "from_profile": boolean } ] }
+  ]
+}
+Note: the "questions" array will contain 5–7 items total: 4–6 main questions + exactly 1 price question.
+On a failed precondition, return ONLY: {"error": string}
+</output>
+`
     ]
   });
 }
