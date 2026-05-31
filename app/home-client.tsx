@@ -305,8 +305,8 @@ export function HomeClient() {
     <main className="relative min-h-screen px-4 pb-32 pt-12">
       <AnimatePresence>{loading && <GeneratingOverlay products={products} />}</AnimatePresence>
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-        {/* WebGL light rays, angled from the top-right */}
-        <div className="absolute inset-0 opacity-80">
+        {/* WebGL light rays — hidden in light mode (renders on dark canvas) */}
+        <div className="absolute inset-0 opacity-80 light:hidden">
           <LightRays
             raysOrigin="top-right"
             raysColor="#2dd4bf"
@@ -321,7 +321,7 @@ export function HomeClient() {
           />
         </div>
         {/* dot grid */}
-        <div className="bg-dot-grid absolute inset-0 opacity-[0.10]" />
+        <div className="bg-dot-grid absolute inset-0 opacity-[0.10] light:opacity-[0.35]" />
         {/* teal glow matching the light source */}
         <div className="absolute right-0 top-0 h-[600px] w-[600px] translate-x-1/4 -translate-y-1/4 rounded-full bg-teal-400/[0.08] blur-[120px]" />
       </div>
@@ -339,7 +339,7 @@ export function HomeClient() {
       ) : (
         <>
       <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center">
-        <div className="mb-9 flex items-center gap-2 rounded-full border border-teal-400/30 bg-teal-400/10 px-3 py-1.5 text-sm text-teal-300 backdrop-blur-md">
+        <div className="mb-9 flex items-center gap-2 rounded-full border border-teal-400/30 light:border-teal-600/30 bg-teal-400/10 light:bg-teal-50 px-3 py-1.5 text-sm text-teal-300 light:text-teal-700 backdrop-blur-md">
           <span className="h-2 w-2 rounded-full bg-teal-400 animate-pulse" />
           <strong className="font-semibold">{greeting}</strong>
         </div>
@@ -347,7 +347,7 @@ export function HomeClient() {
         <h1
           className="mb-8 max-w-2xl text-center text-4xl font-bold leading-tight tracking-tight sm:text-5xl"
           style={{
-            background: colorScheme === "light"
+            backgroundImage: colorScheme === "light"
               ? "linear-gradient(to bottom, #09090b 0%, #52525b 100%)"
               : "linear-gradient(to bottom, #ffffff 0%, #a1a1aa 100%)",
             WebkitBackgroundClip: "text",
@@ -657,7 +657,7 @@ function ProductCard({
       title="Double click to edit"
     >
       {isEditing && (
-        <div className="absolute left-3 top-2 rounded-full bg-teal-400/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-teal-300">
+        <div className="absolute left-3 top-2 rounded-full bg-teal-400/15 light:bg-teal-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-teal-300 light:text-teal-700">
           Editing
         </div>
       )}

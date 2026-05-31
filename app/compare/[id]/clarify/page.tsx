@@ -176,7 +176,7 @@ export default function ClarifyPage() {
               <h1 className="text-2xl font-bold text-white light:text-zinc-900">Tune the decision</h1>
               <p className="mt-1 text-sm text-zinc-500">Answer the questions below, then analyze.</p>
             </div>
-            <div className="rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1.5 text-xs text-teal-300">
+            <div className="rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1.5 text-xs text-teal-300 light:text-teal-700">
               Meridian Software profile applied
             </div>
           </div>
@@ -243,7 +243,7 @@ export default function ClarifyPage() {
                 transition={{ duration: 0.22, ease: "easeOut" }}
               >
                 <div className="mb-5">
-                  <p className="text-xs font-medium uppercase tracking-wide text-teal-400">
+                  <p className="text-xs font-medium uppercase tracking-wide text-teal-400 light:text-teal-700">
                     {activeQuestion.groupTitle}
                   </p>
                   <p className="mt-1 text-sm text-zinc-500">{activeQuestion.groupSubtitle}</p>
@@ -264,7 +264,7 @@ export default function ClarifyPage() {
         <div className="mt-10 flex items-center justify-between">
           <button
             onClick={stepIndex === 0 ? () => router.back() : goBack}
-            className="text-zinc-500 hover:text-zinc-300 text-sm transition-colors"
+            className="text-zinc-500 hover:text-zinc-300 light:hover:text-zinc-700 text-sm transition-colors"
           >
             {stepIndex === 0 ? "← Back" : "← Previous"}
           </button>

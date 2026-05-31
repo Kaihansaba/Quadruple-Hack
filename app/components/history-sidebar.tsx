@@ -77,7 +77,7 @@ export function HistorySidebar({
         }`}
       >
         <div className="mb-4 flex items-center justify-between px-2">
-          <Link href="/" className="text-sm font-semibold text-white light:text-zinc-900">
+          <Link href="/home" className="text-sm font-semibold text-white light:text-zinc-900">
             Verdict
           </Link>
           <div className="flex items-center gap-2">
@@ -103,7 +103,7 @@ export function HistorySidebar({
         </div>
 
         <Link
-          href="/"
+          href="/home"
           className="mb-4 rounded-lg border border-zinc-800 light:border-zinc-200 px-3 py-2 text-sm text-zinc-200 light:text-zinc-700 transition-colors hover:border-zinc-600 light:hover:border-zinc-400 hover:bg-zinc-900 light:hover:bg-zinc-50"
         >
           New comparison
