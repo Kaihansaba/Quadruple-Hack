@@ -1,6 +1,6 @@
 export type CriterionDirection = "higher" | "lower";
 export type CriterionType = "soft" | "hard";
-export type SourceType = "spec" | "expert_review" | "user_review" | "vendor_claim";
+export type SourceType = "spec" | "expert_review" | "user_review" | "vendor_claim" | "uploaded_document";
 
 export type Product = {
   id: string;

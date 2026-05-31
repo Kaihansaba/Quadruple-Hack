@@ -5,7 +5,7 @@ import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import type { StartResponse } from "@/lib/api-types";
 import type { ClarifyBody } from "@/lib/api-types";
-import { parseSessionData, saveSessionData } from "@/lib/session-data";
+import { parseSessionData, readSessionData, saveSessionData } from "@/lib/session-data";
 import { upsertComparisonHistory } from "@/lib/comparison-history";
 import OnboardCard from "@/components/ui/onboard-card";
 
@@ -32,12 +32,22 @@ export default function ClarifyPage() {
     const raw = searchParams.get("data");
     if (raw) {
       try {
-        setData(parseSessionData<StartResponse>(raw));
+        const parsed = parseSessionData<StartResponse>(raw);
+        setData(parsed);
+        saveSessionData(id, parsed);
       } catch {
         setError("Invalid session data.");
       }
+      return;
     }
-  }, [searchParams]);
+
+    const saved = readSessionData<StartResponse>(id);
+    if (saved) {
+      setData(saved);
+    } else {
+      setError("Invalid session data.");
+    }
+  }, [id, searchParams]);
 
   // Pre-fill answers marked from_profile
   useEffect(() => {
@@ -86,10 +96,7 @@ export default function ClarifyPage() {
         : [])
     ];
 
-    const body: ClarifyBody & {
-      products: StartResponse["products"];
-      criteria: StartResponse["criteria"];
-    } = {
+    const body: ClarifyBody = {
       products: data.products,
       criteria: data.criteria,
       answers: answerList

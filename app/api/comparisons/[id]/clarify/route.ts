@@ -6,7 +6,7 @@ import { sanitizeCall1OutputForProfile } from "@/lib/criteria-sanitizer";
 import { runDecisionEngine } from "@/lib/engine/decision-engine";
 import { computeRobustness } from "@/lib/engine/robustness";
 import type { DecisionEngineInput, ExtractedValue, Criterion } from "@/lib/engine/types";
-import type { ClarifyBody, ClarifyResponse } from "@/lib/api-types";
+import type { ClarifyBody, ClarifyResponse, DocumentPage, StartProduct } from "@/lib/api-types";
 
 // Fuzzy-match a model-generated criterion ID to the nearest canonical ID.
 // Handles cases where the LLM invents slight variations (e.g. "soc2_type2" → "soc2_type_ii").
@@ -47,18 +47,37 @@ function weightsFromCriteria(criteria: Criterion[]) {
   );
 }
 
+function productDocuments(products: StartProduct[]) {
+  return products
+    .filter((product) => product.documentText?.trim())
+    .map((product) => ({
+      productName: product.name,
+      text: product.documentText ?? "",
+      perPage: product.perPage as DocumentPage[] | undefined
+    }));
+}
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await params;
 
   const body: ClarifyBody & {
-    products: Array<{ name: string; url: string | null }>;
+    products: StartProduct[];
     criteria: Call1Output["criteria"];
   } = await req.json();
 
   const { products, answers } = body;
+  const documents = productDocuments(products);
   const profile = DEMO_PROFILE;
   const criteria = sanitizeCall1OutputForProfile(
-    { criteria: body.criteria, questions: [] },
+    {
+      comparability: {
+        verdict: "comparable",
+        category: null,
+        reason: "Products already passed the start-step comparability check."
+      },
+      criteria: body.criteria,
+      questions: []
+    },
     profile
   ).criteria;
   const canonicalIds = criteria.map((c) => c.id);
@@ -68,7 +87,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     products.map((p) => p.name),
     criteria,
     answers.map((a) => ({ question: a.question, answer: a.answer })),
-    profile
+    profile,
+    documents.length > 0 ? documents : undefined
   );
 
   let call2: Call2Output;
