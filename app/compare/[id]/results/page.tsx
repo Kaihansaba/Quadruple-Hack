@@ -9,9 +9,15 @@ import {
   PolarGrid,
   PolarAngleAxis,
   ResponsiveContainer,
-  Tooltip
+  Tooltip,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid
 } from "recharts";
 import { redistributeWeight } from "@/lib/engine/decision-engine";
+import { computeTco, type PricingModel, type TcoProduct } from "@/lib/engine/tco";
 import { parseSessionData, readSessionData, saveSessionData } from "@/lib/session-data";
 import { upsertComparisonHistory } from "@/lib/comparison-history";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -126,6 +132,45 @@ function formatPrice(raw: string | number | boolean | null, unit?: string): stri
   return unit && /year|annual|yr/i.test(unit) ? `${formatted}/yr` : formatted;
 }
 
+function isPricingModel(value: unknown): value is PricingModel {
+  if (!value || typeof value !== "object") return false;
+  const model = value as Partial<PricingModel>;
+  return typeof model.type === "string" && typeof model.confidence === "number";
+}
+
+function formatMoney(value: number, currency: string) {
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: currency && currency !== "unknown" ? currency : "USD",
+    maximumFractionDigits: 0
+  }).format(value);
+}
+
+function formatTierPrice(tier: NonNullable<PricingModel["tiers"]>[number], model: PricingModel) {
+  const period = model.period === "year" ? "yr" : model.period === "month" ? "mo" : "period";
+  const unit = model.unit ?? "unit";
+  const parts = [];
+  if (tier.unit_price > 0) parts.push(`${formatMoney(tier.unit_price, model.currency)}/${unit}/${period}`);
+  if ((tier.flat_price ?? 0) > 0) parts.push(`${formatMoney(tier.flat_price ?? 0, model.currency)}/${period}`);
+  if (parts.length === 0) return "Free";
+  return parts.join(" + ");
+}
+
+function pricingSource(product: TcoProduct) {
+  const model = product.pricing_model;
+  return model?.source_url ?? null;
+}
+
+function displayTierUsed(product: TcoProduct, tierUsed: string | null) {
+  if (tierUsed) return tierUsed;
+  const model = product.pricing_model;
+  if (!model?.tiers || model.per_unit_price == null) return "Model price";
+  const matchingTier = model.tiers.find(
+    (tier) => tier.unit_price === model.per_unit_price && (tier.flat_price ?? 0) === (model.base_price ?? 0)
+  );
+  return matchingTier?.tier_name ?? "Model price";
+}
+
 // The recommended product's two strongest soft criteria, with their real values.
 function winnerHighlights(
   winnerId: string,
@@ -167,6 +212,10 @@ export default function ResultsPage() {
   const [priorityFirmness, setPriorityFirmness] = useState(DEFAULT_PRIORITY_FIRMNESS);
   const [robustnessPending, setRobustnessPending] = useState(false);
   const [printMemo, setPrintMemo] = useState<MemoData | null>(null);
+  const [tcoSeats, setTcoSeats] = useState(40);
+  const [tcoGrowthRate, setTcoGrowthRate] = useState(20);
+  const [tcoYears, setTcoYears] = useState(3);
+  const [tcoSelectedTiers, setTcoSelectedTiers] = useState<Record<string, string>>({});
   const chatEndRef = useRef<HTMLDivElement>(null);
   const skipInitialRobustnessRef = useRef(true);
 
@@ -664,6 +713,14 @@ export default function ResultsPage() {
     }
     return entry;
   });
+  const tcoProducts: TcoProduct[] = (engineInputRef.current?.engineInput?.products ?? []).map((product) => {
+    const model = product.rawMetadata?.pricing_model;
+    return {
+      id: product.id,
+      name: product.name,
+      pricing_model: isPricingModel(model) ? model : null
+    };
+  });
 
   return (
     <>
@@ -1134,11 +1191,377 @@ export default function ResultsPage() {
             Export result as PDF
           </button>
         </div>
+        <CostSimulationPanel
+          products={tcoProducts}
+          seats={tcoSeats}
+          growthRatePct={tcoGrowthRate}
+          years={tcoYears}
+          selectedTiers={tcoSelectedTiers}
+          onSeatsChange={setTcoSeats}
+          onGrowthRateChange={setTcoGrowthRate}
+          onYearsChange={setTcoYears}
+          onTierChange={(productId, tierName) =>
+            setTcoSelectedTiers((prev) => {
+              const next = { ...prev };
+              if (tierName) next[productId] = tierName;
+              else delete next[productId];
+              return next;
+            })
+          }
+          colorScheme={colorScheme}
+        />
       </div>
       </main>
       <div className="memo-print-root">
         {printMemo && <DecisionMemo memo={printMemo} />}
       </div>
     </>
+  );
+}
+
+function CostSimulationPanel({
+  products,
+  seats,
+  growthRatePct,
+  years,
+  selectedTiers,
+  onSeatsChange,
+  onGrowthRateChange,
+  onYearsChange,
+  onTierChange,
+  colorScheme
+}: {
+  products: TcoProduct[];
+  seats: number;
+  growthRatePct: number;
+  years: number;
+  selectedTiers: Record<string, string>;
+  onSeatsChange: (value: number) => void;
+  onGrowthRateChange: (value: number) => void;
+  onYearsChange: (value: number) => void;
+  onTierChange: (productId: string, tierName: string) => void;
+  colorScheme: "dark" | "light";
+}) {
+  const [debouncedUsage, setDebouncedUsage] = useState({
+    seats,
+    growthRatePct,
+    years,
+    selectedTiers
+  });
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedUsage({ seats, growthRatePct, years, selectedTiers });
+    }, 150);
+    return () => window.clearTimeout(timeout);
+  }, [seats, growthRatePct, years, selectedTiers]);
+
+  const pricedProducts = products.filter((product) => product.pricing_model);
+  const projection = computeTco(pricedProducts, {
+    seats: debouncedUsage.seats,
+    growthRatePct: debouncedUsage.growthRatePct,
+    years: debouncedUsage.years,
+    selectedTierByProduct: debouncedUsage.selectedTiers
+  });
+  const projectedYears = debouncedUsage.years;
+  const availableProducts = projection.products.filter((product) => product.available);
+  const unavailableProducts = projection.products.filter((product) => !product.available);
+
+  if (products.length === 0 || pricedProducts.length === 0 || availableProducts.length === 0) {
+    return (
+      <section className="no-print rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-900 light:bg-white p-6">
+        <h2 className="text-white light:text-zinc-900 font-semibold">Cost Simulation</h2>
+        <p className="mt-2 text-sm text-zinc-400 light:text-zinc-600">
+          Cost simulation unavailable — no public pricing found.
+        </p>
+      </section>
+    );
+  }
+
+  const chartData = Array.from({ length: projectedYears }, (_, index) => {
+    const year = index + 1;
+    const row: Record<string, number | string> = { year: `Year ${year}` };
+    for (const product of availableProducts) {
+      row[product.productId] = product.perYear[index]?.cumulativeCost ?? 0;
+    }
+    return row;
+  });
+  const cheapestTotal = projection.ranking[0]?.totalCost ?? null;
+  const mostExpensiveTotal = projection.ranking.at(-1)?.totalCost ?? null;
+  const productName = (productId: string | null) =>
+    products.find((product) => product.id === productId)?.name ?? productId ?? "Unavailable";
+  const primaryCurrency = availableProducts[0]?.currency ?? "USD";
+  const sourceProducts = products.filter((product) => pricingSource(product));
+
+  return (
+    <section className="no-print rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-900 light:bg-white p-6">
+      <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-white light:text-zinc-900 font-semibold">Cost Simulation</h2>
+          <p className="mt-1 text-sm text-zinc-500 light:text-zinc-600">
+            Project total cost from extracted pricing models. No LLM or network calls.
+          </p>
+        </div>
+        <span className="inline-flex w-fit rounded-full border border-zinc-700 light:border-zinc-200 px-3 py-1 text-xs text-zinc-400 light:text-zinc-600">
+          Currency: {primaryCurrency}
+        </span>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-950/40 light:bg-zinc-50 p-4">
+            <div className="space-y-4">
+              <label className="block">
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <span className="font-medium text-zinc-200 light:text-zinc-800">Seats</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={1000}
+                    value={seats}
+                    onChange={(event) => onSeatsChange(Math.max(1, Number(event.target.value) || 1))}
+                    className="w-20 rounded-lg border border-zinc-700 light:border-zinc-200 bg-zinc-900 light:bg-white px-2 py-1 text-right text-sm text-white light:text-zinc-900 outline-none"
+                  />
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={500}
+                  value={seats}
+                  onChange={(event) => onSeatsChange(Number(event.target.value))}
+                  className="w-full accent-blue-500"
+                />
+              </label>
+
+              <label className="block">
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <span className="font-medium text-zinc-200 light:text-zinc-800">Growth rate</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={growthRatePct}
+                    onChange={(event) => onGrowthRateChange(Math.max(0, Number(event.target.value) || 0))}
+                    className="w-20 rounded-lg border border-zinc-700 light:border-zinc-200 bg-zinc-900 light:bg-white px-2 py-1 text-right text-sm text-white light:text-zinc-900 outline-none"
+                  />
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={growthRatePct}
+                  onChange={(event) => onGrowthRateChange(Number(event.target.value))}
+                  className="w-full accent-blue-500"
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-2 block font-medium text-zinc-200 light:text-zinc-800">Horizon</span>
+                <select
+                  value={years}
+                  onChange={(event) => onYearsChange(Number(event.target.value))}
+                  className="w-full rounded-xl border border-zinc-700 light:border-zinc-200 bg-zinc-900 light:bg-white px-3 py-2 text-sm text-white light:text-zinc-900 outline-none"
+                >
+                  {[1, 2, 3, 4, 5].map((year) => (
+                    <option key={year} value={year}>
+                      {year} {year === 1 ? "year" : "years"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4">
+            <h3 className="mb-3 text-sm font-semibold text-white light:text-zinc-900">Vendor tiers</h3>
+            <div className="space-y-3">
+              {pricedProducts.map((product) => {
+                const model = product.pricing_model;
+                const projected = projection.products.find((item) => item.productId === product.id);
+                const tiers = model?.tiers ?? [];
+                const defaultTier = displayTierUsed(product, projected?.tierUsed ?? null);
+
+                return (
+                  <label key={product.id} className="block">
+                    <span className="mb-1.5 block text-xs font-medium text-zinc-400 light:text-zinc-600">
+                      {product.name}
+                    </span>
+                    {tiers.length > 0 ? (
+                      <select
+                        value={selectedTiers[product.id] ?? ""}
+                        onChange={(event) => onTierChange(product.id, event.target.value)}
+                        className="w-full rounded-xl border border-zinc-700 light:border-zinc-200 bg-zinc-950 light:bg-white px-3 py-2 text-sm text-white light:text-zinc-900 outline-none"
+                      >
+                        <option value="">Default ({defaultTier})</option>
+                        {tiers.map((tier) => (
+                          <option key={tier.tier_name ?? `${tier.unit_price}-${tier.flat_price}`} value={tier.tier_name ?? ""}>
+                            {(tier.tier_name ?? "Unnamed tier")} – {formatTierPrice(tier, model!)}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <p className="rounded-xl border border-zinc-800 light:border-zinc-200 bg-zinc-950 light:bg-zinc-50 px-3 py-2 text-sm text-zinc-400">
+                        {model?.per_unit_price != null
+                          ? `${formatMoney(model.per_unit_price, model.currency)}/${model.unit ?? "unit"}/${model.period ?? "period"}`
+                          : "No tier list available"}
+                      </p>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-950/40 light:bg-zinc-50 p-4">
+            <div className="mb-3 rounded-xl border border-blue-500/15 bg-blue-500/5 px-4 py-3 text-sm text-blue-200 light:text-blue-700">
+              Cheapest today: <span className="font-semibold">{productName(projection.insight.cheapestNow)}</span>.
+              {" "}Cheapest over {projectedYears} {projectedYears === 1 ? "year" : "years"}:{" "}
+              <span className="font-semibold">{productName(projection.insight.cheapestOverHorizon)}</span>.
+              <div className="mt-1 text-xs text-blue-200/75 light:text-blue-700/80">
+                {projection.insight.crossovers.length > 0
+                  ? projection.insight.crossovers.map((crossover) =>
+                      `${productName(crossover.productA)} overtakes ${productName(crossover.productB)} in year ${crossover.year}.`
+                    ).join(" ")
+                  : "No crossover at these tiers — costs scale proportionally."}
+              </div>
+            </div>
+
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={chartData} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke={colorScheme === "light" ? "#e4e4e7" : "#27272a"} strokeDasharray="3 3" />
+                <XAxis dataKey="year" tick={{ fill: colorScheme === "light" ? "#52525b" : "#a1a1aa", fontSize: 12 }} />
+                <YAxis
+                  tick={{ fill: colorScheme === "light" ? "#52525b" : "#a1a1aa", fontSize: 12 }}
+                  tickFormatter={(value) => `$${Math.round(Number(value) / 1000)}k`}
+                />
+                <Tooltip
+                  formatter={(value, name) => [
+                    formatMoney(Number(value), primaryCurrency),
+                    products.find((product) => product.id === name)?.name ?? name
+                  ]}
+                  contentStyle={{
+                    background: colorScheme === "light" ? "#ffffff" : "#18181b",
+                    border: `1px solid ${colorScheme === "light" ? "#e4e4e7" : "#27272a"}`,
+                    borderRadius: 8
+                  }}
+                  labelStyle={{ color: colorScheme === "light" ? "#09090b" : "#fafafa" }}
+                />
+                {availableProducts.map((product, index) => (
+                  <Line
+                    key={product.productId}
+                    type="monotone"
+                    dataKey={product.productId}
+                    stroke={COLORS[index % COLORS.length]}
+                    strokeWidth={2.5}
+                    dot={{ r: 3 }}
+                    activeDot={{ r: 5 }}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            {projection.products.map((product, index) => {
+              const source = pricingSource(products.find((item) => item.id === product.productId)!);
+              const isCheapest = cheapestTotal !== null && product.totalCost === cheapestTotal;
+              const isMostExpensive = mostExpensiveTotal !== null && product.totalCost === mostExpensiveTotal && projection.ranking.length > 1;
+
+              return (
+                <div
+                  key={product.productId}
+                  className="rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-950/40 light:bg-zinc-50 p-4"
+                >
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: COLORS[index % COLORS.length] }} />
+                    <h3 className="text-sm font-semibold text-white light:text-zinc-900">{productName(product.productId)}</h3>
+                  </div>
+                  {product.available ? (
+                    <>
+                      <p className="text-xs text-zinc-500">Tier</p>
+                      <p className="mb-3 text-sm text-zinc-200 light:text-zinc-700">
+                        {displayTierUsed(products.find((item) => item.id === product.productId)!, product.tierUsed)}
+                      </p>
+                      <p className="text-xs text-zinc-500">Total over {projectedYears} years</p>
+                      <p className="text-xl font-bold text-white light:text-zinc-900">
+                        {formatMoney(product.totalCost ?? 0, product.currency)}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {isCheapest && (
+                          <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] text-green-300 light:text-green-700">
+                            Cheapest
+                          </span>
+                        )}
+                        {isMostExpensive && (
+                          <span className="rounded-full bg-yellow-500/10 px-2 py-0.5 text-[11px] text-yellow-300 light:text-yellow-700">
+                            Most expensive
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-3 py-2 text-xs leading-5 text-yellow-200 light:text-yellow-700">
+                      Pricing not publicly determinable — excluded from projection. {product.notes}
+                    </p>
+                  )}
+                  {source && (
+                    <a
+                      href={source}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-flex text-xs text-blue-300 underline decoration-dotted underline-offset-2 light:text-blue-700"
+                    >
+                      Pricing source ↗
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {projection.insight.notes.length > 0 && (
+            <div className="space-y-1">
+              {projection.insight.notes.map((note) => (
+                <p key={note} className="text-xs text-zinc-500 light:text-zinc-600">
+                  {note}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {unavailableProducts.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {unavailableProducts.map((product) => (
+                <span
+                  key={product.productId}
+                  title={product.notes ?? undefined}
+                  className="rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-xs text-yellow-200 light:text-yellow-700"
+                >
+                  {productName(product.productId)} pricing unavailable
+                </span>
+              ))}
+            </div>
+          )}
+
+          {sourceProducts.length > 0 && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+              {sourceProducts.map((product) => (
+                <a
+                  key={product.id}
+                  href={pricingSource(product) ?? undefined}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline decoration-dotted underline-offset-2 hover:text-zinc-300 light:hover:text-zinc-700"
+                >
+                  {product.name} pricing source
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }

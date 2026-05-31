@@ -24,6 +24,7 @@ create table if not exists products (
   name text not null,
   url text,
   logo_url text,
+  pricing_model jsonb,
   raw_metadata jsonb not null default '{}'::jsonb
 );
 

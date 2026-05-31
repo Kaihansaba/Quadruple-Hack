@@ -43,7 +43,25 @@ export type Call2Output = {
     source_type: "spec" | "expert_review" | "user_review" | "vendor_claim" | "uploaded_document";
     confidence: number;
   }>;
+  pricing_models?: Array<{
+    product_name: string;
+    pricing_model: PricingModel;
+  }>;
   proposed_weights: Record<string, number>;
+};
+
+export type PricingModel = {
+  type: "per_seat" | "flat" | "tiered" | "usage_based" | "unknown";
+  currency: string;
+  base_price: number | null;
+  per_unit_price: number | null;
+  unit: string | null;
+  period: "month" | "year" | null;
+  tiers: Array<{ up_to_units: number | null; unit_price: number; flat_price: number | null }> | null;
+  minimum: number | null;
+  notes: string | null;
+  source_url: string | null;
+  confidence: number;
 };
 
 type ProductDocument = {
@@ -286,8 +304,9 @@ export function call2Prompt(
     1. For each product in the products list, search the web for current pricing, specifications, features, user reviews, and expert reviews.
     2. For each (product × criterion) pair, identify the strongest available evidence.
     3. Extract a raw_value from that evidence and record its source URL.
-    4. Assign a confidence score (0–1) based on source reliability and recency.
-    5. After extracting all values, set proposed_weights for soft criteria based on how strongly each criterion differentiates the products.
+    4. For each product, extract a structured pricing_model from evidenced pricing data.
+    5. Assign a confidence score (0–1) based on source reliability and recency.
+    6. After extracting all values, set proposed_weights for soft criteria based on how strongly each criterion differentiates the products.
     </steps>
     
     <rules>
@@ -305,6 +324,20 @@ export function call2Prompt(
     - Uploaded documents are the primary evidence source for the matching product — prefer them over web sources.
     - If a criterion's value comes from an uploaded document, set source_type to "uploaded_document" and source_url to "uploaded document, p.N" when a page is available, otherwise "uploaded document".
     - If an uploaded document conflicts with a web source, prefer the uploaded document and reflect the discrepancy via reduced confidence on the web-sourced entry.` : ""}
+
+    Pricing model
+    - Return exactly one pricing_model for each product in the products list.
+    - Extract ONLY pricing facts evidenced by web search or uploaded documents. Do NOT invent or estimate missing pricing numbers.
+    - type must be one of: "per_seat", "flat", "tiered", "usage_based", "unknown".
+    - currency should be an ISO currency code such as "USD" or "EUR" when evidenced; use "unknown" when no currency is evidenced.
+    - base_price is the flat/base component per period, if any. per_unit_price is the price per unit per period, if any.
+    - unit is the billed unit, e.g. "seat", "user", "GB", "transaction", or null when unknown.
+    - period is "month", "year", or null when no billing period is evidenced.
+    - tiers is null unless tiered pricing is evidenced. If present, each tier must include up_to_units (number or null for unlimited/open-ended), unit_price, and flat_price.
+    - minimum is the evidenced minimum spend/commitment, or null.
+    - notes should briefly explain ambiguous pricing, contact-sales pricing, enterprise-only pricing, discounts, or missing public pricing.
+    - source_url must be the strongest source for the pricing model, or null if no pricing source exists.
+    - confidence is 0–1. Use LOW confidence for private/contact-sales/not-public pricing. Prefer an honest type "unknown" with low confidence over any fabricated number.
     
     Weights
     - proposed_weights maps each soft criterion_id to a float; weights must sum to exactly 1.0.
@@ -312,9 +345,10 @@ export function call2Prompt(
     </rules>
     
     <output>
-    Return ONLY valid JSON — no markdown, no code fences, no commentary — with keys: extracted_values (array) and proposed_weights (object).
+    Return ONLY valid JSON — no markdown, no code fences, no commentary — with keys: extracted_values (array), pricing_models (array), and proposed_weights (object).
     CRITICAL: criterion_id MUST be copied EXACTLY from valid_criterion_ids. Do NOT invent or rename IDs. Valid IDs are: ${criteria.map((c) => c.id).join(", ")}.
     extracted_values: one entry per (product, criterion) pair with fields: product_name (exact match to products list), criterion_id (exact match to valid_criterion_ids), raw_value (string), source_url, source_type (${allowedSourceTypes}), confidence (0–1).
+    pricing_models: one entry per product with fields: product_name (exact match to products list), pricing_model (object with fields type, currency, base_price, per_unit_price, unit, period, tiers, minimum, notes, source_url, confidence).
     </output>
     `
     ]    

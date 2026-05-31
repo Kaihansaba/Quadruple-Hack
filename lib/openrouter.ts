@@ -11,8 +11,112 @@ const MODEL_SEARCH = process.env.OPENROUTER_MODEL_SEARCH ?? "perplexity/sonar-pr
 
 type Message = { role: "system" | "user" | "assistant"; content: string };
 
-function stripFences(raw: string): string {
-  return raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+type JsonRecoveryPath = "direct" | "fenced" | "balanced";
+
+function parseJsonCandidate(candidate: string) {
+  JSON.parse(candidate);
+  return candidate.trim();
+}
+
+function fencedJsonCandidates(raw: string): string[] {
+  return [...raw.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi)].map((match) => match[1]);
+}
+
+function balancedJsonCandidates(raw: string): string[] {
+  const candidates: string[] = [];
+
+  for (let start = 0; start < raw.length; start += 1) {
+    const opener = raw[start];
+    if (opener !== "{" && opener !== "[") continue;
+
+    const expectedClosers = opener === "{" ? ["}"] : ["]"];
+    const stack = [...expectedClosers];
+    let inString = false;
+    let escaped = false;
+
+    for (let index = start + 1; index < raw.length; index += 1) {
+      const char = raw[index];
+
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        escaped = inString;
+        continue;
+      }
+
+      if (char === "\"") {
+        inString = !inString;
+        continue;
+      }
+
+      if (inString) continue;
+
+      if (char === "{") {
+        stack.push("}");
+      } else if (char === "[") {
+        stack.push("]");
+      } else if (char === "}" || char === "]") {
+        if (stack.at(-1) !== char) break;
+        stack.pop();
+        if (stack.length === 0) {
+          candidates.push(raw.slice(start, index + 1));
+          break;
+        }
+      }
+    }
+  }
+
+  return candidates;
+}
+
+export function extractJsonFromModelResponse(raw: string): { json: string; path: JsonRecoveryPath } {
+  try {
+    return { json: parseJsonCandidate(raw), path: "direct" };
+  } catch {
+    // Continue through recovery paths.
+  }
+
+  for (const candidate of fencedJsonCandidates(raw)) {
+    try {
+      return { json: parseJsonCandidate(candidate), path: "fenced" };
+    } catch {
+      // Try the next fenced block, if any.
+    }
+  }
+
+  for (const candidate of balancedJsonCandidates(raw)) {
+    try {
+      return { json: parseJsonCandidate(candidate), path: "balanced" };
+    } catch {
+      // Try the next balanced-looking object/array, if any.
+    }
+  }
+
+  throw new Error("No valid JSON found in model response.");
+}
+
+function logJsonRecoveryPath(callName: string, path: JsonRecoveryPath, attempt: number) {
+  console.warn(`[TEMP json-recovery] ${callName}: ${path} parse succeeded on attempt ${attempt}`);
+}
+
+async function jsonResponseCall(model: string, messages: Message[], json: boolean, callName: string): Promise<string> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const raw = await chat(model, messages, json);
+    try {
+      const parsed = extractJsonFromModelResponse(raw);
+      logJsonRecoveryPath(callName, parsed.path, attempt);
+      return parsed.json;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Failed to parse model JSON response.");
 }
 
 async function chat(model: string, messages: Message[], json: boolean): Promise<string> {
@@ -48,21 +152,17 @@ async function chat(model: string, messages: Message[], json: boolean): Promise<
 
 // Call 1: criteria + questions — JSON, no web
 export async function structuredCall(messages: Message[]): Promise<string> {
-  const raw = await chat(MODEL_JSON, messages, true);
-  return stripFences(raw);
+  return jsonResponseCall(MODEL_JSON, messages, true, "structuredCall");
 }
 
 export async function perplexitySearchCall(query: string): Promise<string> {
   const raw = await chat(MODEL_SEARCH, [{ role: "user", content: query }], false);
-  return stripFences(raw);
+  return raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
 }
 
 // Call 2: extraction — web search enabled; JSON mode off to avoid plugin conflict
 export async function webExtractCall(messages: Message[]): Promise<string> {
-  const raw = await chat(MODEL_WEB, messages, false);
-  const stripped = stripFences(raw);
-  JSON.parse(stripped); // throws if malformed, caller handles
-  return stripped;
+  return jsonResponseCall(MODEL_WEB, messages, false, "webExtractCall");
 }
 
 // Call 3: verdict — plain prose, no JSON
@@ -72,6 +172,5 @@ export async function narrateCall(messages: Message[]): Promise<string> {
 
 // Chat intent interpretation — JSON, no web
 export async function jsonCall(messages: Message[]): Promise<string> {
-  const raw = await chat(MODEL_JSON, messages, true);
-  return stripFences(raw);
+  return jsonResponseCall(MODEL_JSON, messages, true, "jsonCall");
 }

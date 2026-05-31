@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { webExtractCall, narrateCall } from "@/lib/openrouter";
-import { call2Prompt, call3Prompt, type Call1Output, type Call2Output } from "@/lib/prompts";
+import { call2Prompt, call3Prompt, type Call1Output, type Call2Output, type PricingModel } from "@/lib/prompts";
 import { DEMO_PROFILE } from "@/lib/demo-profile";
 import { sanitizeCall1OutputForProfile } from "@/lib/criteria-sanitizer";
 import { runDecisionEngine } from "@/lib/engine/decision-engine";
@@ -55,6 +55,10 @@ function productDocuments(products: StartProduct[]) {
       text: product.documentText ?? "",
       perPage: product.perPage as DocumentPage[] | undefined
     }));
+}
+
+function pricingModelFor(productName: string, call2: Call2Output): PricingModel | undefined {
+  return call2.pricing_models?.find((entry) => entry.product_name === productName)?.pricing_model;
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -113,12 +117,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }));
 
   // Build engine input
-  const engineProducts = products.map((p, i) => ({
-    id: `prod_${i}`,
-    name: p.name,
-    url: p.url ?? "",
-    logoUrl: undefined
-  }));
+  const engineProducts = products.map((p, i) => {
+    const pricingModel = pricingModelFor(p.name, call2);
+    return {
+      id: `prod_${i}`,
+      name: p.name,
+      url: p.url ?? "",
+      logoUrl: undefined,
+      rawMetadata: pricingModel ? { pricing_model: pricingModel } : undefined
+    };
+  });
 
   const softIds = criteria.filter((c) => c.type === "soft").map((c) => c.id);
   const engineCriteria: Criterion[] = criteria.map((c) => ({
