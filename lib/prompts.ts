@@ -61,16 +61,17 @@ of candidate products together with the buyer's company profile, then produce
 confident purchasing decision.
 
 <inputs>
-You will receive a JSON object in the user message shaped like:
+You will receive a JSON object shaped like:
 {
-  "products": [
-    { "name": string, "category"?: string, "price"?: number | "variable", "unit"?: string, ... }
-  ],
-  "profile": {
-    "sector": string,
+  "products": ["ProductA", "ProductB", ...],
+  "company_profile": {
+    "name": string,
+    "industry": string,
+    "size": string,
     "tech_stack": string[],
     "compliance_reqs": string[],
-    "preferred_suppliers": string[]
+    "preferred_suppliers": string[],
+    "budget_ceiling": number | null
   }
 }
 </inputs>
@@ -140,7 +141,7 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary — matchi
   "questions": [
     { "id": string, "category": "priorities" | "dealbreakers" | "clarification",
       "question": string,
-      "input_type": "text" | "select" (optional, default "select"),
+      "input_type": "per_product" | "select" (optional, default "select"),
       "suggested_answers": [ { "label": string, "from_profile": boolean } ] }
   ]
 }
