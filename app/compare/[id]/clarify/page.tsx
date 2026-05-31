@@ -246,6 +246,7 @@ export default function ClarifyPage() {
                   q={activeQuestion.question}
                   selected={answers[activeQuestion.question.id]}
                   onSelect={selectAnswer}
+                  products={data.products.map((p) => p.name)}
                 />
               </motion.div>
             ) : null}
@@ -279,7 +280,7 @@ export default function ClarifyPage() {
           ) : (
             <button
               onClick={() => goNext(totalSteps)}
-              disabled={!activeQuestion || !answers[activeQuestion.question.id]}
+              disabled={!activeQuestion || (activeQuestion.question.input_type !== "per_product" && !answers[activeQuestion.question.id])}
               className="rounded-xl bg-teal-600 px-7 py-3 text-sm font-semibold text-white transition-colors hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Next →
@@ -314,57 +315,98 @@ function RunningOverlay({ products }: { products: string[] }) {
 function QuestionCard({
   q,
   selected,
-  onSelect
+  onSelect,
+  products
 }: {
   q: StartResponse["questions"][number];
   selected: string | undefined;
   onSelect: (id: string, label: string) => void;
+  products: string[];
 }) {
+  const isPerProduct = q.input_type === "per_product";
+
   // The answer is "custom" when it doesn't match any suggested chip.
   const isCustom =
+    !isPerProduct &&
     selected !== undefined &&
     selected.length > 0 &&
     !q.suggested_answers.some((a) => a.label === selected);
 
+  function getPerProductValues(): Record<string, string> {
+    try {
+      return selected ? JSON.parse(selected) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function handlePerProductChange(productName: string, value: string) {
+    const current = getPerProductValues();
+    const updated = { ...current, [productName]: value };
+    onSelect(q.id, JSON.stringify(updated));
+  }
+
   return (
     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5 sm:p-6">
       <p className="mb-5 text-base font-medium leading-7 text-zinc-100">{q.question}</p>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {q.suggested_answers.map((a) => {
-          const isSelected = selected === a.label;
-          return (
-            <button
-              key={a.label}
-              onClick={() => onSelect(q.id, a.label)}
-              className={`flex min-h-11 items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition-all ${
-                isSelected
-                  ? "border-teal-500 bg-teal-500/15 text-white"
-                  : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+      {isPerProduct ? (
+        <div className="flex flex-col gap-3">
+          {products.map((productName) => {
+            const value = getPerProductValues()[productName] ?? "";
+            return (
+              <div key={productName} className="flex items-center gap-3">
+                <span className="w-32 shrink-0 truncate text-sm text-zinc-400">{productName}</span>
+                <input
+                  type="text"
+                  value={value}
+                  onChange={(event) => handlePerProductChange(productName, event.target.value)}
+                  placeholder="e.g. $75/user/mo"
+                  className="flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-zinc-500"
+                />
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {q.suggested_answers.map((a) => {
+              const isSelected = selected === a.label;
+              return (
+                <button
+                  key={a.label}
+                  onClick={() => onSelect(q.id, a.label)}
+                  className={`flex min-h-11 items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition-all ${
+                    isSelected
+                      ? "border-teal-500 bg-teal-500/15 text-white"
+                      : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                  }`}
+                >
+                  <span>{a.label}</span>
+                  <span className={`ml-3 h-4 w-4 rounded-full border ${isSelected ? "border-teal-400 bg-teal-400" : "border-zinc-600"}`} />
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-3">
+            <input
+              type="text"
+              value={isCustom ? selected : ""}
+              onChange={(event) => onSelect(q.id, event.target.value)}
+              placeholder="Other..."
+              className={`w-full rounded-xl border px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 ${
+                isCustom
+                  ? "border-teal-500 bg-teal-500/10"
+                  : "border-zinc-700 bg-zinc-900 focus:border-zinc-500"
               }`}
-            >
-              <span>{a.label}</span>
-              <span className={`ml-3 h-4 w-4 rounded-full border ${isSelected ? "border-teal-400 bg-teal-400" : "border-zinc-600"}`} />
-            </button>
-          );
-        })}
-      </div>
+            />
+          </div>
 
-      <div className="mt-3">
-        <input
-          type="text"
-          value={isCustom ? selected : ""}
-          onChange={(event) => onSelect(q.id, event.target.value)}
-          placeholder="Other..."
-          className={`w-full rounded-xl border px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 ${
-            isCustom
-              ? "border-teal-500 bg-teal-500/10"
-              : "border-zinc-700 bg-zinc-900 focus:border-zinc-500"
-          }`}
-        />
-      </div>
-
-      {q.suggested_answers.some((answer) => answer.from_profile) && (
-        <p className="mt-3 text-xs text-teal-400">Profile suggested option included.</p>
+          {q.suggested_answers.some((answer) => answer.from_profile) && (
+            <p className="mt-3 text-xs text-teal-400">Profile suggested option included.</p>
+          )}
+        </>
       )}
     </div>
   );
