@@ -12,11 +12,11 @@ import {
   Tooltip
 } from "recharts";
 import { redistributeWeight } from "@/lib/engine/decision-engine";
-import { parseSessionData } from "@/lib/session-data";
+import { parseSessionData, readSessionData, saveSessionData } from "@/lib/session-data";
 import { upsertComparisonHistory } from "@/lib/comparison-history";
 import { DecisionMemo, type MemoData } from "@/app/components/DecisionMemo";
 import { DEMO_PROFILE } from "@/lib/demo-profile";
-import type { DecisionEngineResult, Criterion } from "@/lib/engine/types";
+import type { DecisionEngineInput, DecisionEngineResult, Criterion } from "@/lib/engine/types";
 import type {
   ChatBody,
   ClarifyResponse,
@@ -130,9 +130,10 @@ export default function ResultsPage() {
 
   useEffect(() => {
     const raw = searchParams.get("data");
-    if (!raw) return;
     try {
-      const parsed = parseSessionData<ClarifyResponse>(raw);
+      const parsed = raw ? parseSessionData<ClarifyResponse>(raw) : readSessionData<ClarifyResponse>(id);
+      if (!parsed) return;
+      saveSessionData(id, parsed);
       engineInputRef.current = parsed;
       setResult(parsed.result);
       setCriteria(parsed.criteria);
@@ -147,7 +148,7 @@ export default function ResultsPage() {
       upsertComparisonHistory({
         id,
         title: parsed.products.map((product) => product.name).join(" vs "),
-        href: `/compare/${id}/results?data=${encodeURIComponent(JSON.stringify(parsed))}`,
+        href: `/compare/${id}/results`,
         status: "results"
       });
     } catch {
@@ -223,14 +224,18 @@ export default function ResultsPage() {
       if (!engineInputRef.current || reweightPending) return;
       setReweightPending(true);
       const prev = engineInputRef.current;
+      const engineInput = prev.engineInput;
+      if (!engineInput) {
+        setReweightPending(false);
+        return;
+      }
 
       const body: ReweightBody & {
-        engineInput: ClarifyResponse["result"] & { products: Product[]; criteria: Criterion[] };
+        engineInput: DecisionEngineInput;
         criteria: Criterion[];
       } = {
         weights: newWeights,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        engineInput: { ...prev.result, products: prev.products, criteria: prev.criteria } as any,
+        engineInput,
         criteria: prev.criteria as Criterion[]
       };
 
@@ -245,6 +250,14 @@ export default function ResultsPage() {
         setResult(data.result);
         setCriteria(data.criteria);
         setRobustness(data.robustness ?? null);
+        engineInputRef.current = {
+          ...prev,
+          result: data.result,
+          criteria: data.criteria,
+          products: data.products,
+          robustness: data.robustness,
+          engineInput: { ...engineInput, criteria: data.criteria }
+        };
       } catch {
         // silent
       } finally {
@@ -398,6 +411,12 @@ export default function ResultsPage() {
     setMessages(nextMessages);
 
     const prev = engineInputRef.current;
+    const engineInput = prev.engineInput;
+    if (!engineInput) {
+      setMessages([...nextMessages, { role: "assistant", content: "This comparison is missing the original scoring data, so I can't refine it. Please rerun the comparison." }]);
+      setChatLoading(false);
+      return;
+    }
     const body: ChatBody & {
       engineInput: unknown;
       criteria: unknown;
@@ -405,7 +424,7 @@ export default function ResultsPage() {
       history: typeof messages;
     } = {
       message: text,
-      engineInput: { ...prev.result, products: prev.products, criteria: prev.criteria },
+      engineInput,
       criteria: prev.criteria,
       currentWeights: weights,
       history: messages.slice(-6)
@@ -427,6 +446,13 @@ export default function ResultsPage() {
           if (c.type === "soft") newW[c.id] = c.weight ?? 0;
         }
         setWeights(newW);
+        engineInputRef.current = {
+          ...prev,
+          result: data.result,
+          criteria: data.criteria,
+          products: data.products ?? prev.products,
+          engineInput: { ...engineInput, criteria: data.criteria }
+        };
       }
     } catch {
       setMessages([...nextMessages, { role: "assistant", content: "Something went wrong. Please try again." }]);

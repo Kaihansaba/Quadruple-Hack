@@ -5,7 +5,7 @@ import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import type { StartResponse } from "@/lib/api-types";
 import type { ClarifyBody } from "@/lib/api-types";
-import { parseSessionData } from "@/lib/session-data";
+import { parseSessionData, saveSessionData } from "@/lib/session-data";
 import { upsertComparisonHistory } from "@/lib/comparison-history";
 
 type Answer = {
@@ -102,7 +102,8 @@ export default function ClarifyPage() {
       });
       if (!res.ok) throw new Error(await res.text());
       const result = await res.json();
-      const href = `/compare/${id}/results?data=${encodeURIComponent(JSON.stringify(result))}`;
+      saveSessionData(id, result);
+      const href = `/compare/${id}/results`;
       upsertComparisonHistory({
         id,
         title: data.products.map((product) => product.name).join(" vs "),
