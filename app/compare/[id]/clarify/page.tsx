@@ -7,6 +7,7 @@ import type { StartResponse } from "@/lib/api-types";
 import type { ClarifyBody } from "@/lib/api-types";
 import { parseSessionData, saveSessionData } from "@/lib/session-data";
 import { upsertComparisonHistory } from "@/lib/comparison-history";
+import OnboardCard from "@/components/ui/onboard-card";
 
 type Answer = {
   questionId: string;
@@ -143,10 +144,9 @@ export default function ClarifyPage() {
     }
   ].filter((group) => group.questions.length > 0);
   const questionSteps = groupedQuestions.flatMap((group) =>
-    group.questions.map((question, index) => ({
+    group.questions.map((question) => ({
       groupTitle: group.title,
       groupSubtitle: group.subtitle,
-      number: index + 1,
       question
     }))
   );
@@ -157,7 +157,9 @@ export default function ClarifyPage() {
   const progress = Math.round(((stepIndex + 1) / totalSteps) * 100);
 
   return (
-    <main className="min-h-screen px-4 py-10">
+    <>
+      {loading && <RunningOverlay products={data.products.map((p) => p.name)} />}
+      <main className="min-h-screen px-4 py-10">
       <div className="mx-auto max-w-4xl">
         <div className="sticky top-0 z-10 -mx-4 mb-8 border-b border-zinc-900 bg-[#0d0d0f]/95 px-4 pb-5 pt-1 backdrop-blur">
           <p className="mb-2 text-sm text-zinc-500">Step 2 of 3</p>
@@ -186,7 +188,7 @@ export default function ClarifyPage() {
           </div>
         </div>
 
-        <section className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5 sm:p-6">
+        <section>
           <div className="mb-6">
             <div className="mb-3 flex items-center justify-between gap-4 text-xs text-zinc-500">
               <span>
@@ -241,7 +243,6 @@ export default function ClarifyPage() {
                   <p className="mt-1 text-sm text-zinc-500">{activeQuestion.groupSubtitle}</p>
                 </div>
                 <QuestionCard
-                  number={activeQuestion.number}
                   q={activeQuestion.question}
                   selected={answers[activeQuestion.question.id]}
                   onSelect={selectAnswer}
@@ -292,29 +293,42 @@ export default function ClarifyPage() {
           </p>
         )}
       </div>
-    </main>
+      </main>
+    </>
+  );
+}
+
+function RunningOverlay({ products }: { products: string[] }) {
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0d0d0f]/95 px-4 backdrop-blur-sm">
+      <h2 className="mb-1 text-xl font-bold text-white">Running the comparison</h2>
+      <p className="mb-8 max-w-sm text-center text-sm text-zinc-400">
+        Gathering live evidence for{" "}
+        <span className="text-zinc-200">{products.join(" vs ")}</span> and scoring it.
+      </p>
+      <OnboardCard />
+    </div>
   );
 }
 
 function QuestionCard({
-  number,
   q,
   selected,
   onSelect
 }: {
-  number: number;
   q: StartResponse["questions"][number];
   selected: string | undefined;
   onSelect: (id: string, label: string) => void;
 }) {
+  // The answer is "custom" when it doesn't match any suggested chip.
+  const isCustom =
+    selected !== undefined &&
+    selected.length > 0 &&
+    !q.suggested_answers.some((a) => a.label === selected);
+
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-4">
-      <div className="mb-3 flex gap-3">
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-xs font-medium text-zinc-400">
-          {number}
-        </span>
-        <p className="text-sm font-medium leading-6 text-zinc-200">{q.question}</p>
-      </div>
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5 sm:p-6">
+      <p className="mb-5 text-base font-medium leading-7 text-zinc-100">{q.question}</p>
       <div className="grid gap-2 sm:grid-cols-2">
         {q.suggested_answers.map((a) => {
           const isSelected = selected === a.label;
@@ -334,6 +348,21 @@ function QuestionCard({
           );
         })}
       </div>
+
+      <div className="mt-3">
+        <input
+          type="text"
+          value={isCustom ? selected : ""}
+          onChange={(event) => onSelect(q.id, event.target.value)}
+          placeholder="Other..."
+          className={`w-full rounded-xl border px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 ${
+            isCustom
+              ? "border-green-500 bg-green-500/10"
+              : "border-zinc-700 bg-zinc-900 focus:border-zinc-500"
+          }`}
+        />
+      </div>
+
       {q.suggested_answers.some((answer) => answer.from_profile) && (
         <p className="mt-3 text-xs text-green-400">Profile suggested option included.</p>
       )}

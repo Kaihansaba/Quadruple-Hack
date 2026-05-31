@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { upsertComparisonHistory } from "@/lib/comparison-history";
 import type { StartResponse } from "@/lib/api-types";
+import BoxLoader from "@/components/ui/box-loader";
 
 type Product = { name: string; description: string; files: File[] };
 
@@ -164,6 +165,7 @@ export function HomeClient() {
 
   return (
     <main className="relative min-h-screen px-4 pb-32 pt-12">
+      <AnimatePresence>{loading && <GeneratingOverlay products={products} />}</AnimatePresence>
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
         {/* dot grid */}
         <div className="bg-dot-grid absolute inset-0 opacity-[0.15]" />
@@ -355,12 +357,37 @@ export function HomeClient() {
             {loading && (
               <span className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full border-2 border-white/30 border-t-white animate-spin" />
             )}
-            {products.length < 2 ? "Add 2 products to analyze" : `Analyze ${products.length} products →`}
+            {products.length === 0
+              ? "Add 2 products to compare"
+              : products.length === 1
+                ? "Add 1 more product to compare"
+                : `Analyze ${products.length} products →`}
           </motion.button>
           {error && <p className="text-center text-sm text-red-400">{error}</p>}
         </div>
       </div>
     </main>
+  );
+}
+
+function GeneratingOverlay({ products }: { products: Product[] }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0d0d0f]/95 px-4 backdrop-blur-sm"
+    >
+      <div className="mb-14 flex h-24 items-center justify-center">
+        <BoxLoader />
+      </div>
+      <h2 className="mb-1 text-xl font-bold text-white">Setting up your comparison</h2>
+      <p className="max-w-sm text-center text-sm text-zinc-400">
+        Building the criteria and clarifying questions for{" "}
+        <span className="text-zinc-200">{products.map((p) => p.name).join(" vs ")}</span>.
+      </p>
+    </motion.div>
   );
 }
 
