@@ -30,30 +30,42 @@ export async function POST(req: NextRequest) {
     documents?: StartDocument[];
     forceCompare?: boolean;
   };
-  if (!query) return NextResponse.json({ error: "query required" }, { status: 400 });
+  const queryText = query?.trim() ?? "";
+  const usableDocuments = documents.filter((document) => document.text?.trim());
+  if (!queryText && usableDocuments.length === 0) {
+    return NextResponse.json({ error: "Add at least one product or upload a document to compare." }, { status: 400 });
+  }
 
-  const products = parseProducts(query as string);
-  if (products.length < 2) {
+  const typedProducts = queryText ? parseProducts(queryText) : [];
+  if (typedProducts.length < 2 && usableDocuments.length === 0) {
     return NextResponse.json({ error: "Please enter at least two products to compare." }, { status: 400 });
   }
 
   const profile = DEMO_PROFILE;
   let searchContext: string | undefined;
 
-  try {
-    searchContext = await withTimeout(
-      perplexitySearchCall(searchPrompt(products)),
-      PRODUCT_SEARCH_TIMEOUT_MS,
-      "Product search"
-    );
-    if (process.env.DEBUG_PRODUCT_SEARCH === "true") {
-      console.log("[Product search result]\n", searchContext);
+  if (typedProducts.length > 0) {
+    try {
+      searchContext = await withTimeout(
+        perplexitySearchCall(searchPrompt(typedProducts)),
+        PRODUCT_SEARCH_TIMEOUT_MS,
+        "Product search"
+      );
+      if (process.env.DEBUG_PRODUCT_SEARCH === "true") {
+        console.log("[Product search result]\n", searchContext);
+      }
+    } catch (err) {
+      console.error("[Product search failed]", err);
     }
-  } catch (err) {
-    console.error("[Product search failed]", err);
   }
 
-  const prompt = call1Prompt(products, profile, searchContext, forceCompare);
+  const prompt = call1Prompt(
+    typedProducts,
+    profile,
+    searchContext,
+    forceCompare,
+    usableDocuments.length > 0 ? usableDocuments : undefined
+  );
   let parsed: Call1Output;
   // let parsed: any;
   try {
@@ -75,6 +87,15 @@ export async function POST(req: NextRequest) {
         : sanitizeCall1OutputForProfile(llmOut, profile);
   } catch {
     return NextResponse.json({ error: "LLM returned malformed JSON. Please try again." }, { status: 502 });
+  }
+
+  const detectedProductNames = parsed.detected_products?.map((product) => product.name).filter(Boolean) ?? [];
+  const products = [...new Set([...typedProducts, ...detectedProductNames])];
+  if (parsed.comparability?.verdict !== "incomparable" && products.length < 2) {
+    return NextResponse.json(
+      { error: "Could not identify at least two comparable products from the uploaded documents." },
+      { status: 422 }
+    );
   }
 
   const comparisonId = `cmp_${Date.now()}`;

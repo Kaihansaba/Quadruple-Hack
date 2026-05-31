@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { upsertComparisonHistory } from "@/lib/comparison-history";
-import type { DocumentPage, StartResult } from "@/lib/api-types";
+import type { DocumentPage, StartResponse, StartResult } from "@/lib/api-types";
 import { saveSessionData } from "@/lib/session-data";
 import { formatIncomparableMessage } from "@/lib/start-response";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -20,7 +20,8 @@ type ParsedPage = {
 };
 
 type StartDocument = {
-  productName: string;
+  productName?: string;
+  filename?: string;
   text: string;
   perPage?: DocumentPage[];
 };
@@ -36,6 +37,16 @@ type AttachedFile = {
 };
 
 type Product = { name: string; description: string; files: AttachedFile[] };
+type ConfirmableProduct = StartResponse["products"][number] & {
+  category?: string;
+  detectedFrom?: "document" | "query";
+  sourceDoc?: string;
+  nameAsGiven?: string;
+  nameNormalized?: string;
+  correctionMade?: boolean;
+  note?: string;
+  originalName: string;
+};
 
 const SUGGESTIONS = ["Salesforce", "HubSpot"];
 const MAX_PRODUCTS = 4;
@@ -59,6 +70,29 @@ function readProfileFirstName() {
   } catch {
     return null;
   }
+}
+
+function productsForConfirmation(response: StartResponse): ConfirmableProduct[] {
+  return response.products.map((product) => {
+    const detected = response.detected_products?.find(
+      (item) => item.name === product.name || item.name_normalized === product.name
+    );
+    return {
+      ...product,
+      category: detected?.category,
+      detectedFrom: detected?.detected_from,
+      sourceDoc: detected?.source_doc,
+      nameAsGiven: detected?.name_as_given,
+      nameNormalized: detected?.name_normalized,
+      correctionMade: detected?.correction_made,
+      note: detected?.note,
+      originalName: detected?.name_as_given ?? product.name
+    };
+  });
+}
+
+function displayProductName(product: Product) {
+  return product.name.trim() || product.files[0]?.file.name || "Uploaded document";
 }
 
 function createAttachmentId() {
@@ -85,7 +119,8 @@ function productDocuments(products: Product[]): StartDocument[] {
 
     return [
       {
-        productName: product.name,
+        ...(product.name.trim() ? { productName: product.name.trim() } : {}),
+        filename: product.files[0]?.file.name,
         text,
         perPage: product.files.flatMap((attachment) => attachment.perPage ?? [])
       }
@@ -101,6 +136,8 @@ export function HomeClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [incomparableMessage, setIncomparableMessage] = useState<string | null>(null);
+  const [pendingConfirmation, setPendingConfirmation] = useState<StartResponse | null>(null);
+  const [confirmProducts, setConfirmProducts] = useState<ConfirmableProduct[]>([]);
   const [formOpen, setFormOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [firstName, setFirstName] = useState<string | null>(null);
@@ -108,9 +145,15 @@ export function HomeClient() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
 
+  const draftHasDocumentText = draft.files.some((file) => file.text?.trim());
   const canAddProduct =
-    draft.name.trim().length > 0 && (editingIndex !== null || products.length < MAX_PRODUCTS);
-  const canCompare = products.length >= 2 && !loading;
+    (draft.name.trim().length > 0 || draftHasDocumentText) &&
+    (editingIndex !== null || products.length < MAX_PRODUCTS);
+  const documentReadyCount = products.filter((product) =>
+    product.files.some((file) => file.text?.trim())
+  ).length;
+  const namedProductCount = products.filter((product) => product.name.trim()).length;
+  const canCompare = (namedProductCount >= 2 || documentReadyCount >= 2) && !loading;
   const showInitialAdd = products.length === 0 && !formOpen;
   const canShowAddSlot = products.length < MAX_PRODUCTS && editingIndex === null;
   const greeting = getGreeting(firstName);
@@ -129,10 +172,14 @@ export function HomeClient() {
 
     try {
       const documents = productDocuments(products);
+      const query = products
+        .map((product) => product.name.trim())
+        .filter(Boolean)
+        .join(" vs ");
       const body =
         documents.length > 0
-          ? { query: products.map((product) => product.name).join(" vs "), documents, forceCompare }
-          : { query: products.map((product) => product.name).join(" vs "), forceCompare };
+          ? { ...(query ? { query } : {}), documents, forceCompare }
+          : { query, forceCompare };
 
       const res = await fetch("/api/comparisons/start", {
         method: "POST",
@@ -147,15 +194,9 @@ export function HomeClient() {
         return;
       }
 
-      saveSessionData(data.comparisonId, data);
-      const href = `/compare/${data.comparisonId}/clarify`;
-      upsertComparisonHistory({
-        id: data.comparisonId,
-        title: data.products.map((product) => product.name).join(" vs "),
-        href,
-        status: "clarify"
-      });
-      router.push(href);
+      setPendingConfirmation(data);
+      setConfirmProducts(productsForConfirmation(data));
+      setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setLoading(false);
@@ -194,6 +235,40 @@ export function HomeClient() {
       setEditingIndex(null);
       setFormOpen(false);
     }
+  }
+
+  function confirmComparison() {
+    if (!pendingConfirmation) return;
+    const confirmedProducts = confirmProducts
+      .map(({ category, detectedFrom, sourceDoc, nameAsGiven, nameNormalized, correctionMade, note, originalName, ...product }) => ({
+        ...product,
+        name: product.name.trim()
+      }))
+      .filter((product) => product.name);
+    if (confirmedProducts.length < 2) {
+      setError("Keep at least two products to compare.");
+      return;
+    }
+
+    const confirmed: StartResponse = {
+      ...pendingConfirmation,
+      products: confirmedProducts
+    };
+    saveSessionData(confirmed.comparisonId, confirmed);
+    const href = `/compare/${confirmed.comparisonId}/clarify`;
+    upsertComparisonHistory({
+      id: confirmed.comparisonId,
+      title: confirmed.products.map((product) => product.name).join(" vs "),
+      href,
+      status: "clarify"
+    });
+    router.push(href);
+  }
+
+  function cancelConfirmation() {
+    setPendingConfirmation(null);
+    setConfirmProducts([]);
+    setError(null);
   }
 
   function updateAttachment(id: string, patch: Partial<AttachedFile>) {
@@ -334,7 +409,15 @@ export function HomeClient() {
           <div className="absolute left-1/2 top-[38%] h-[400px] w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#2d71bf]/[0.05] blur-[60px]" />
         </div>
       </div>
-      {incomparableMessage ? (
+      {pendingConfirmation ? (
+        <ProductConfirmationPage
+          products={confirmProducts}
+          onChange={setConfirmProducts}
+          onConfirm={confirmComparison}
+          onBack={cancelConfirmation}
+          error={error}
+        />
+      ) : incomparableMessage ? (
         <IncomparablePage
           message={incomparableMessage}
           products={products.map((product) => product.name)}
@@ -539,9 +622,9 @@ export function HomeClient() {
               <span className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full border-2 border-white/40 border-t-white animate-spin" />
             )}
             {products.length === 0
-              ? "Add 2 products to compare"
-              : products.length === 1
-                ? "Add 1 more product to compare"
+              ? "Add 2 products or documents"
+              : namedProductCount < 2 && documentReadyCount < 2
+                ? "Add 1 more product or document"
                 : `Analyze ${products.length} products →`}
           </motion.button>
           {error && <p className="text-center text-sm text-red-400">{error}</p>}
@@ -618,6 +701,123 @@ function IncomparablePage({
   );
 }
 
+function ProductConfirmationPage({
+  products,
+  onChange,
+  onConfirm,
+  onBack,
+  error
+}: {
+  products: ConfirmableProduct[];
+  onChange: (products: ConfirmableProduct[]) => void;
+  onConfirm: () => void;
+  onBack: () => void;
+  error: string | null;
+}) {
+  function updateProduct(index: number, patch: Partial<ConfirmableProduct>) {
+    onChange(products.map((product, productIndex) => (productIndex === index ? { ...product, ...patch } : product)));
+  }
+
+  function removeProduct(index: number) {
+    onChange(products.filter((_, productIndex) => productIndex !== index));
+  }
+
+  return (
+    <div className="relative z-10 mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-4xl items-center justify-center">
+      <motion.section
+        initial={{ opacity: 0, y: 18, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.28, ease: "easeOut" }}
+        className="w-full rounded-3xl border border-zinc-800 bg-zinc-950/90 p-6 shadow-2xl shadow-black/30 backdrop-blur sm:p-8"
+      >
+        <p className="mb-2 text-sm font-medium uppercase tracking-wide text-blue-300">Confirm products</p>
+        <h1 className="mb-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+          Check the product names before analysis.
+        </h1>
+        <p className="mb-6 max-w-2xl text-sm leading-6 text-zinc-400">
+          Use the suggested correction, revert to the original text, edit a name, or remove anything that should not be compared.
+        </p>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {products.map((product, index) => (
+            <div key={`${product.originalName}-${index}`} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-zinc-500">
+                    {product.detectedFrom === "document" ? `From ${product.sourceDoc ?? "uploaded document"}` : "Typed"}
+                  </p>
+                  <p className="mt-1 text-sm text-zinc-400">{product.category ?? "Category not identified"}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeProduct(index)}
+                  className="rounded-lg px-2 py-1 text-sm text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+                >
+                  Remove
+                </button>
+              </div>
+
+              {product.correctionMade && product.nameAsGiven && product.nameNormalized && (
+                <div className="mb-3 rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-sm text-blue-200">
+                  <span className="text-zinc-400">Suggested correction:</span>{" "}
+                  <span className="line-through decoration-blue-300/60">{product.nameAsGiven}</span>
+                  <span> → </span>
+                  <span className="font-semibold text-white">{product.nameNormalized}</span>
+                  {product.note && <p className="mt-1 text-xs text-blue-200/80">{product.note}</p>}
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updateProduct(index, { name: product.nameNormalized ?? product.name })}
+                      className="rounded-lg bg-blue-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-400"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateProduct(index, { name: product.nameAsGiven ?? product.originalName })}
+                      className="rounded-lg border border-blue-400/30 px-2.5 py-1 text-xs font-semibold text-blue-100 hover:bg-blue-500/10"
+                    >
+                      Revert
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-zinc-500">Confirmed name</span>
+                <input
+                  value={product.name}
+                  onChange={(event) => updateProduct(index, { name: event.target.value })}
+                  className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white outline-none transition-colors focus:border-blue-400"
+                />
+              </label>
+            </div>
+          ))}
+        </div>
+
+        {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
+
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-xl bg-blue-500 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-300"
+          >
+            Confirm and continue
+          </button>
+          <button
+            type="button"
+            onClick={onBack}
+            className="rounded-xl border border-zinc-700 px-5 py-3 text-sm font-semibold text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-900"
+          >
+            Back to edit
+          </button>
+        </div>
+      </motion.section>
+    </div>
+  );
+}
+
 function GeneratingOverlay({ products }: { products: Product[] }) {
   return (
     <motion.div
@@ -633,7 +833,7 @@ function GeneratingOverlay({ products }: { products: Product[] }) {
       <h2 className="mb-1 text-xl font-bold text-white">Setting up your comparison</h2>
       <p className="max-w-sm text-center text-sm text-zinc-400">
         Building the criteria and clarifying questions for{" "}
-        <span className="text-zinc-200">{products.map((p) => p.name).join(" vs ")}</span>.
+        <span className="text-zinc-200">{products.map(displayProductName).join(" vs ")}</span>.
       </p>
     </motion.div>
   );
@@ -674,14 +874,14 @@ function ProductCard({
         type="button"
         onClick={onRemove}
         className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-        aria-label={`Remove ${product.name}`}
+        aria-label={`Remove ${displayProductName(product)}`}
       >
         ×
       </button>
       <div className={`pr-7 ${isEditing ? "pt-5" : ""}`}>
         <div className="mb-1 flex items-center gap-2">
-          <ProductLogo name={product.name} size={24} />
-          <p className="truncate text-sm font-medium text-white light:text-zinc-900">{product.name}</p>
+          <ProductLogo name={displayProductName(product)} size={24} />
+          <p className="truncate text-sm font-medium text-white light:text-zinc-900">{displayProductName(product)}</p>
         </div>
         <p className="mt-1 overflow-hidden text-xs leading-5 text-zinc-400 light:text-zinc-500 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
           {product.description || "No note added"}

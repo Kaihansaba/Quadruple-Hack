@@ -161,6 +161,13 @@ function pricingSource(product: TcoProduct) {
   return model?.source_url ?? null;
 }
 
+function documentCitationLabel(sourceUrl: string | null) {
+  const pageMatch = sourceUrl?.match(/\bp\.?\s*(\d+)\b/i);
+  return pageMatch
+    ? `From your uploaded document (p.${pageMatch[1]})`
+    : "From your uploaded document";
+}
+
 function displayTierUsed(product: TcoProduct, tierUsed: string | null) {
   if (tierUsed) return tierUsed;
   const model = product.pricing_model;
@@ -960,6 +967,7 @@ export default function ResultsPage() {
                         );
                         const norm = cell?.normalizedValue ?? 0;
                         const hasSource = Boolean(cell?.sourceUrl);
+                        const isUploadedDocument = cell?.sourceType === "uploaded_document";
                         const cellTitle =
                           cell && !cell.missing
                             ? `${cell.rawValue}${cell.sourceType ? ` · ${cell.sourceType}` : ""}`
@@ -976,7 +984,17 @@ export default function ResultsPage() {
                         );
                         return (
                           <td key={r.productId} className="px-4 py-2.5 text-center">
-                            {hasSource ? (
+                            {isUploadedDocument ? (
+                              <span
+                                className="inline-flex items-center gap-1 align-middle transition-opacity hover:opacity-80"
+                                title={documentCitationLabel(cell?.sourceUrl ?? null)}
+                              >
+                                {scoreEl}
+                                <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-300 light:text-blue-700">
+                                  {documentCitationLabel(cell?.sourceUrl ?? null)}
+                                </span>
+                              </span>
+                            ) : hasSource ? (
                               <a
                                 href={cell!.sourceUrl!}
                                 target="_blank"

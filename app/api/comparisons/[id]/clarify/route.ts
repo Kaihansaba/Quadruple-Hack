@@ -71,6 +71,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { products, answers } = body;
   const documents = productDocuments(products);
+  if (documents.length > 0) {
+    console.log(
+      "[TEMP document-plumbing] clarify received document text",
+      documents.map((document) => ({
+        productName: document.productName,
+        textLength: document.text.length,
+        pageCount: document.perPage?.length ?? 0
+      }))
+    );
+  }
   const profile = DEMO_PROFILE;
   const criteria = sanitizeCall1OutputForProfile(
     {

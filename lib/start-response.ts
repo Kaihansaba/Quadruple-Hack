@@ -2,13 +2,18 @@ import type { Call1Output } from "./prompts";
 import type { Comparability, DocumentPage, StartProduct, StartResult } from "./api-types";
 
 export type StartDocument = {
-  productName: string;
+  productName?: string;
+  filename?: string;
   text: string;
   perPage?: DocumentPage[];
 };
 
 function normalizeName(value: string) {
   return value.trim().toLowerCase();
+}
+
+function documentName(document: StartDocument, index: number) {
+  return document.filename?.trim() || document.productName?.trim() || `uploaded-document-${index + 1}`;
 }
 
 function normalizeComparability(
@@ -42,7 +47,33 @@ function normalizeComparability(
 
 function attachDocuments(products: string[], documents: StartDocument[]): StartProduct[] {
   return products.map((name) => {
-    const document = documents.find((doc) => normalizeName(doc.productName) === normalizeName(name));
+    const document = documents.find((doc) => doc.productName && normalizeName(doc.productName) === normalizeName(name));
+
+    if (!document?.text?.trim()) {
+      return { name, url: null };
+    }
+
+    return {
+      name,
+      url: null,
+      documentText: document.text,
+      perPage: document.perPage ?? []
+    };
+  });
+}
+
+function attachDocumentsForDetectedProducts(
+  products: string[],
+  documents: StartDocument[],
+  detectedProducts: Call1Output["detected_products"] | undefined
+): StartProduct[] {
+  return products.map((name) => {
+    const detected = detectedProducts?.find((product) => normalizeName(product.name) === normalizeName(name));
+    const document = documents.find((doc, index) => {
+      if (doc.productName && normalizeName(doc.productName) === normalizeName(name)) return true;
+      if (detected?.source_doc && normalizeName(documentName(doc, index)) === normalizeName(detected.source_doc)) return true;
+      return false;
+    });
 
     if (!document?.text?.trim()) {
       return { name, url: null };
@@ -73,13 +104,17 @@ export function buildStartResponse({
   if (comparability.verdict === "incomparable") {
     return {
       status: "incomparable",
-      comparability
+      comparability,
+      ...(parsed.detected_products ? { detected_products: parsed.detected_products } : {})
     };
   }
 
   return {
     comparisonId,
-    products: attachDocuments(products, documents),
+    products: parsed.detected_products
+      ? attachDocumentsForDetectedProducts(products, documents, parsed.detected_products)
+      : attachDocuments(products, documents),
+    ...(parsed.detected_products ? { detected_products: parsed.detected_products } : {}),
     criteria: parsed.criteria,
     questions: parsed.questions,
     comparability

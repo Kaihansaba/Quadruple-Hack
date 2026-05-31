@@ -31,6 +31,7 @@ export type StartResponse = {
   status?: "ready";
   comparisonId: string;
   products: StartProduct[];
+  detected_products?: Call1Output["detected_products"];
   criteria: Call1Output["criteria"];
   questions: Call1Output["questions"];
   comparability?: Comparability;
@@ -39,6 +40,7 @@ export type StartResponse = {
 export type StartIncomparableResponse = {
   status: "incomparable";
   comparability: Comparability;
+  detected_products?: Call1Output["detected_products"];
 };
 
 export type StartResult = StartResponse | StartIncomparableResponse;
