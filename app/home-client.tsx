@@ -426,7 +426,6 @@ export function HomeClient() {
           onBack={() => {
             setIncomparableMessage(null);
             setError(null);
-            router.push("/");
           }}
         />
       ) : (
