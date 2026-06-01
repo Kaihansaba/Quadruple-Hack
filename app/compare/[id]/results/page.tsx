@@ -197,6 +197,67 @@ function winnerHighlights(
     .slice(0, 2);
 }
 
+// ── markdown renderer for chat messages ──────────────────────────────────────
+
+function renderInline(text: string): React.ReactNode[] {
+  return text.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g).map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**"))
+      return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>;
+    if (part.startsWith("*") && part.endsWith("*") && part.length > 2)
+      return <em key={i}>{part.slice(1, -1)}</em>;
+    return part;
+  });
+}
+
+function MarkdownText({ content }: { content: string }) {
+  const elements: React.ReactNode[] = [];
+  const lines = content.split("\n");
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^[-*•]\s+/.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^[-*•]\s+/.test(lines[i]))
+        items.push(lines[i++].replace(/^[-*•]\s+/, ""));
+      elements.push(
+        <ul key={`ul-${i}`} className="my-1 space-y-1">
+          {items.map((item, j) => (
+            <li key={j} className="flex items-start gap-2">
+              <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-50" />
+              <span>{renderInline(item)}</span>
+            </li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+    if (/^\d+\.\s+/.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\d+\.\s+/.test(lines[i]))
+        items.push(lines[i++].replace(/^\d+\.\s+/, ""));
+      elements.push(
+        <ol key={`ol-${i}`} className="my-1 space-y-1">
+          {items.map((item, j) => (
+            <li key={j} className="flex items-start gap-2">
+              <span className="min-w-[1rem] shrink-0 text-xs font-semibold opacity-60">{j + 1}.</span>
+              <span>{renderInline(item)}</span>
+            </li>
+          ))}
+        </ol>
+      );
+      continue;
+    }
+    if (line.trim() === "") {
+      if (elements.length > 0) elements.push(<div key={`gap-${i}`} className="h-1.5" />);
+      i++;
+      continue;
+    }
+    elements.push(<p key={`p-${i}`}>{renderInline(line)}</p>);
+    i++;
+  }
+  return <div className="space-y-0.5">{elements}</div>;
+}
+
 // ── main page ────────────────────────────────────────────────────────────────
 
 export default function ResultsPage() {
@@ -502,8 +563,8 @@ export default function ResultsPage() {
 
   // ── chat ────────────────────────────────────────────────────────────────────
 
-  async function sendChat() {
-    const text = chatInput.trim();
+  async function sendChat(override?: string) {
+    const text = (override ?? chatInput).trim();
     if (!text || chatLoading || !engineInputRef.current) return;
     setChatInput("");
     setChatLoading(true);
@@ -1157,9 +1218,30 @@ export default function ResultsPage() {
             <div className="px-6 py-4 border-b border-zinc-800 light:border-zinc-200">
               <h2 className="text-white light:text-zinc-900 font-semibold">Refine</h2>
               <p className="text-zinc-500 text-xs mt-0.5">
-                Ask questions or say "what if budget didn't matter?"
+                Ask questions or adjust priorities with natural language.
               </p>
             </div>
+
+            {messages.length === 0 && (
+              <div className="px-6 pt-4 pb-2 flex flex-wrap gap-2">
+                {[
+                  `Why did ${winner.productName} win?`,
+                  "What if price didn't matter?",
+                  "Explain the score gap",
+                  "What are the key risks?"
+                ].map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => sendChat(chip)}
+                    disabled={chatLoading}
+                    className="rounded-full border border-zinc-700 light:border-zinc-200 bg-zinc-800/50 light:bg-zinc-50 px-3 py-1.5 text-xs text-zinc-300 light:text-zinc-600 transition-colors hover:border-blue-400/50 hover:text-blue-300 light:hover:text-blue-600 disabled:opacity-40"
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {messages.length > 0 && (
               <div className="px-6 py-4 space-y-4 max-h-80 overflow-y-auto">
@@ -1172,7 +1254,7 @@ export default function ResultsPage() {
                           : "bg-zinc-800 light:bg-zinc-100 text-zinc-200 light:text-zinc-700 rounded-bl-sm"
                       }`}
                     >
-                      {m.content}
+                      {m.role === "assistant" ? <MarkdownText content={m.content} /> : m.content}
                     </div>
                   </div>
                 ))}
@@ -1191,7 +1273,7 @@ export default function ResultsPage() {
                 className="flex-1 bg-zinc-800 light:bg-zinc-50 text-white light:text-zinc-900 placeholder-zinc-500 rounded-xl px-4 py-2 text-sm outline-none border border-zinc-700 light:border-zinc-200 focus:border-zinc-500 light:focus:border-zinc-400 transition-colors"
               />
               <button
-                onClick={sendChat}
+                onClick={() => sendChat()}
                 disabled={!chatInput.trim() || chatLoading}
                 className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm transition-colors"
               >
