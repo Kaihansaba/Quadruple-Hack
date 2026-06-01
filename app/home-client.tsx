@@ -379,7 +379,7 @@ export function HomeClient() {
   return (
     <main className="relative min-h-screen px-4 pb-32 pt-12">
       <AnimatePresence>{loading && <GeneratingOverlay products={products} />}</AnimatePresence>
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
         {/* WebGL light rays — hidden in light mode (renders on dark canvas) */}
         <div className="absolute inset-0 opacity-80 light:hidden">
           <LightRays

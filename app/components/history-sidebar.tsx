@@ -72,7 +72,7 @@ export function HistorySidebar({
       </button>
 
       <aside
-        className={`no-print fixed left-0 top-0 z-20 hidden h-screen w-72 border-r border-zinc-800 light:border-zinc-200 bg-zinc-950/95 light:bg-white/95 px-3 py-4 transition-transform duration-300 lg:flex lg:flex-col ${
+        className={`no-print fixed left-0 top-0 z-20 hidden h-screen w-72 border-r border-zinc-800 light:border-zinc-200 bg-zinc-950 light:bg-white px-3 py-4 transition-transform duration-300 lg:flex lg:flex-col ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -197,11 +197,13 @@ function HistoryRow({ item }: { item: ComparisonHistoryItem }) {
   return (
     <Link
       href={item.href}
-      className="block rounded-lg px-2 py-2 text-sm transition-colors hover:bg-zinc-900 light:hover:bg-zinc-50"
+      className="group block rounded-lg px-2 py-2 text-sm transition-all duration-200 ease-out hover:translate-x-1 hover:bg-zinc-800/70 light:hover:bg-zinc-100"
       title={item.title}
     >
-      <div className="truncate text-zinc-200 light:text-zinc-700">{item.title}</div>
-      <div className="mt-1 flex items-center justify-between gap-2 text-xs text-zinc-500">
+      <div className="truncate text-zinc-300 light:text-zinc-700 transition-colors duration-200 group-hover:text-white light:group-hover:text-zinc-900">
+        {item.title}
+      </div>
+      <div className="mt-1 flex items-center justify-between gap-2 text-xs text-zinc-500 transition-colors duration-200 group-hover:text-zinc-400 light:group-hover:text-zinc-500">
         <span>{item.status === "results" ? "Results" : "Clarify"}</span>
         <time dateTime={item.updatedAt}>{formatTime(item.updatedAt)}</time>
       </div>
