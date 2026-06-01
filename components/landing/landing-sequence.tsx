@@ -162,7 +162,7 @@ function ProblemSection({ scrollRef }: { scrollRef: RefObject<HTMLDivElement | n
 
                 <motion.div
                   style={{ opacity: card2Opacity, y: card2Y }}
-                  className="rounded-3xl border border-white/[0.08] bg-gradient-to-b from-green-400/10 to-green-400/[0.02] p-6 text-left backdrop-blur-sm sm:p-8"
+                  className="rounded-3xl border border-white/[0.08] bg-gradient-to-b from-blue-400/10 to-blue-400/[0.02] p-6 text-left backdrop-blur-sm sm:p-8"
                 >
                   <div
                     className="text-[4rem] font-black leading-none tracking-tight text-white sm:text-[5.5rem]"
@@ -236,7 +236,7 @@ function PileupCard({
         className="flex min-h-14 items-center justify-between gap-5 rounded-2xl border border-white/10 bg-zinc-900/95 px-5 py-4 shadow-[0_18px_55px_rgba(0,0,0,0.38)] backdrop-blur"
       >
         <span className="text-sm font-medium text-zinc-100 sm:text-base">{problem}</span>
-        <span className="h-2 w-2 shrink-0 rounded-full bg-green-300/80 shadow-[0_0_18px_rgba(134,239,172,0.6)]" />
+        <span className="h-2 w-2 shrink-0 rounded-full bg-blue-300/80 shadow-[0_0_18px_rgba(147,197,253,0.6)]" />
       </motion.div>
     </div>
   );
@@ -268,7 +268,7 @@ function PileupSection({
       <div className="sticky top-0 h-screen overflow-hidden bg-[#050608]">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_20%,rgba(34,197,94,0.11),transparent_28%),linear-gradient(to_bottom,#050608,#09090b)]"
+          className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_20%,rgba(59,130,246,0.11),transparent_28%),linear-gradient(to_bottom,#050608,#09090b)]"
         />
 
         <div className="relative z-10 flex h-full flex-col items-center justify-center px-5 sm:px-8">
@@ -287,7 +287,7 @@ function PileupSection({
           <div className="relative w-full max-w-xl">
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute left-1/2 top-1/2 h-52 w-52 -translate-x-1/2 -translate-y-1/2 rounded-full bg-green-400/10 blur-3xl"
+              className="pointer-events-none absolute left-1/2 top-1/2 h-52 w-52 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-400/10 blur-3xl"
             />
             {PROBLEMS.map((problem, i) => (
               <PileupCard
@@ -310,7 +310,7 @@ function GetStartedSection({ scrollRef }: { scrollRef: RefObject<HTMLDivElement 
     <div className="relative h-screen overflow-hidden bg-[#050608]">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_42%,rgba(34,197,94,0.16),transparent_28%),radial-gradient(circle_at_50%_58%,rgba(255,255,255,0.08),transparent_32%),linear-gradient(to_bottom,#050608,#09090b)]"
+        className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_42%,rgba(59,130,246,0.16),transparent_28%),radial-gradient(circle_at_50%_58%,rgba(255,255,255,0.08),transparent_32%),linear-gradient(to_bottom,#050608,#09090b)]"
       />
       <div
         aria-hidden="true"
@@ -323,7 +323,7 @@ function GetStartedSection({ scrollRef }: { scrollRef: RefObject<HTMLDivElement 
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.4, root: scrollRef }}
           transition={{ duration: 0.35, ease: "easeOut" }}
-          className="mb-5 text-sm font-semibold uppercase tracking-[0.34em] text-green-300/80"
+          className="mb-5 text-sm font-semibold uppercase tracking-[0.34em] text-blue-300/80"
         >
           Introducing
         </motion.p>
