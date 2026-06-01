@@ -1,4 +1,4 @@
-import type { Call1Output } from "./prompts";
+import type { Call1Output, CompanyProfile } from "./prompts";
 import type { DecisionEngineInput, DecisionEngineResult } from "./engine/types";
 
 export type RobustnessResponse = {
@@ -35,12 +35,14 @@ export type StartResponse = {
   criteria: Call1Output["criteria"];
   questions: Call1Output["questions"];
   comparability?: Comparability;
+  profile?: CompanyProfile;
 };
 
 export type StartIncomparableResponse = {
   status: "incomparable";
   comparability: Comparability;
   detected_products?: Call1Output["detected_products"];
+  profile?: CompanyProfile;
 };
 
 export type StartResult = StartResponse | StartIncomparableResponse;
@@ -48,6 +50,7 @@ export type StartResult = StartResponse | StartIncomparableResponse;
 export type ClarifyBody = {
   products?: StartProduct[];
   criteria?: Call1Output["criteria"];
+  profile?: CompanyProfile;
   answers: Array<{ questionId: string; question: string; answer: string; category: string }>;
 };
 
@@ -57,6 +60,7 @@ export type ClarifyResponse = {
   products: Array<{ id: string; name: string }>;
   verdict: string;
   robustness: RobustnessResponse;
+  profile?: CompanyProfile;
   engineInput?: DecisionEngineInput;
 };
 

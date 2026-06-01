@@ -570,6 +570,8 @@ export default function ResultsPage() {
     reweight(weights);
   }
 
+  const activeProfile = engineInputRef.current?.profile ?? DEMO_PROFILE;
+
   function buildMemoData(): MemoData {
     if (!result || products.length === 0 || criteria.length === 0) {
       throw new Error("Missing result data for decision memo.");
@@ -600,7 +602,7 @@ export default function ResultsPage() {
         criterion.type === "hard"
           ? "Treated as a mandatory requirement before weighted scoring."
           : `Weighted at ${pct(criterion.weight ?? 0)}% based on the buyer's stated priorities.`,
-      fromProfile: DEMO_PROFILE.default_weights[criterion.id] !== undefined
+      fromProfile: activeProfile.default_weights[criterion.id] !== undefined
     }));
     const memoScores = result.cells
       .filter((cell) => products.some((product) => product.id === cell.productId))
@@ -651,7 +653,7 @@ export default function ResultsPage() {
 
     return {
       title: "Vendor Selection Decision Memo",
-      to: `${DEMO_PROFILE.name} leadership team`,
+      to: `${activeProfile.name} leadership team`,
       from: "Procurement evaluation team",
       date: new Date().toLocaleDateString(undefined, {
         year: "numeric",
@@ -660,7 +662,7 @@ export default function ResultsPage() {
       }),
       subject: `${products.map((product) => product.name).join(" vs ")} selection`,
       decisionStatus: "Recommended for Approval",
-      preparedBy: DEMO_PROFILE.name,
+      preparedBy: activeProfile.name,
       totalEstimatedCost: "Pending final vendor quote",
       selectedVendorId: selectedRanking.productId,
       criteria: memoCriteria,
@@ -852,7 +854,7 @@ export default function ResultsPage() {
     ? `Strongest on ${highlights
         .map((h) => (h.raw !== null && h.raw !== "" ? `${h.name} (${h.raw})` : h.name))
         .join(" and ")}.`
-    : `${winner.productName} is the best overall fit for ${DEMO_PROFILE.name}.`;
+    : `${winner.productName} is the best overall fit for ${activeProfile.name}.`;
 
   // Assumptions window — buyer inputs + data caveats.
   const priorities = [...softCriteria]
@@ -1305,21 +1307,21 @@ export default function ResultsPage() {
                     <dd className="text-zinc-300 light:text-zinc-700">{mustHaves.join(", ")}</dd>
                   </div>
                 )}
-                {DEMO_PROFILE.budget_ceiling != null && (
+                {activeProfile.budget_ceiling != null && (
                   <div className="flex gap-3">
                     <dt className="w-28 shrink-0 text-zinc-500">Budget ceiling</dt>
-                    <dd className="text-zinc-300 light:text-zinc-700">${DEMO_PROFILE.budget_ceiling.toLocaleString()}</dd>
+                    <dd className="text-zinc-300 light:text-zinc-700">${activeProfile.budget_ceiling.toLocaleString()}</dd>
                   </div>
                 )}
-                {DEMO_PROFILE.compliance_reqs.length > 0 && (
+                {activeProfile.compliance_reqs.length > 0 && (
                   <div className="flex gap-3">
                     <dt className="w-28 shrink-0 text-zinc-500">Compliance</dt>
-                    <dd className="text-zinc-300 light:text-zinc-700">{DEMO_PROFILE.compliance_reqs.join(", ")}</dd>
+                    <dd className="text-zinc-300 light:text-zinc-700">{activeProfile.compliance_reqs.join(", ")}</dd>
                   </div>
                 )}
                 <div className="flex gap-3">
                   <dt className="w-28 shrink-0 text-zinc-500">Company</dt>
-                  <dd className="text-zinc-300">{DEMO_PROFILE.name}</dd>
+                  <dd className="text-zinc-300">{activeProfile.name}</dd>
                 </div>
               </dl>
 

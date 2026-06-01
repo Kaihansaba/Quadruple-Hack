@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { webExtractCall, narrateCall } from "@/lib/openrouter";
 import { call2Prompt, call3Prompt, type Call1Output, type Call2Output, type PricingModel } from "@/lib/prompts";
-import { DEMO_PROFILE } from "@/lib/demo-profile";
 import { sanitizeCall1OutputForProfile } from "@/lib/criteria-sanitizer";
 import { runDecisionEngine } from "@/lib/engine/decision-engine";
 import { computeRobustness } from "@/lib/engine/robustness";
 import { saveStoredComparison } from "@/lib/server-comparison-store";
+import { loadCompanyProfile } from "@/lib/server-profile";
 import type { DecisionEngineInput, ExtractedValue, Criterion } from "@/lib/engine/types";
 import type { ClarifyBody, ClarifyResponse, DocumentPage, StartProduct } from "@/lib/api-types";
 
@@ -154,7 +154,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }))
     );
   }
-  const profile = DEMO_PROFILE;
+  const profile = await loadCompanyProfile(body.profile);
   const criteria = sanitizeCall1OutputForProfile(
     {
       comparability: {
@@ -334,6 +334,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     products: engineProducts.map((p) => ({ id: p.id, name: p.name })),
     verdict,
     robustness,
+    profile,
     engineInput
   };
 

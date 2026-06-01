@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { perplexitySearchCall, structuredCall } from "@/lib/openrouter";
 import { call1Prompt, searchPrompt, type Call1Output } from "@/lib/prompts";
 import { sanitizeCall1OutputForProfile } from "@/lib/criteria-sanitizer";
-import { DEMO_PROFILE } from "@/lib/demo-profile";
+import { loadCompanyProfile } from "@/lib/server-profile";
 import { parseProducts } from "@/lib/product-parser";
 import { buildStartResponse, type StartDocument } from "@/lib/start-response";
 
@@ -25,11 +25,13 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: str
 }
 
 export async function POST(req: NextRequest) {
-  const { query, documents = [], forceCompare = false } = (await req.json()) as {
+  const body = (await req.json()) as {
     query?: string;
     documents?: StartDocument[];
     forceCompare?: boolean;
+    profile?: unknown;
   };
+  const { query, documents = [], forceCompare = false } = body;
   const queryText = query?.trim() ?? "";
   const usableDocuments = documents.filter((document) => document.text?.trim());
   if (!queryText && usableDocuments.length === 0) {
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Please enter at least two products to compare." }, { status: 400 });
   }
 
-  const profile = DEMO_PROFILE;
+  const profile = await loadCompanyProfile(body.profile);
   let searchContext: string | undefined;
 
   if (typedProducts.length > 0) {
@@ -103,7 +105,8 @@ export async function POST(req: NextRequest) {
     comparisonId,
     products,
     parsed,
-    documents
+    documents,
+    profile
   });
 
   return NextResponse.json(response);

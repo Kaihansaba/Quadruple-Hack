@@ -100,6 +100,7 @@ export default function ClarifyPage() {
     const body: ClarifyBody = {
       products: data.products,
       criteria: data.criteria,
+      profile: data.profile,
       answers: answerList
     };
 

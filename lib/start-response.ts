@@ -1,4 +1,5 @@
 import type { Call1Output } from "./prompts";
+import type { CompanyProfile } from "./prompts";
 import type { Comparability, DocumentPage, StartProduct, StartResult } from "./api-types";
 
 export type StartDocument = {
@@ -92,12 +93,14 @@ export function buildStartResponse({
   comparisonId,
   products,
   parsed,
-  documents = []
+  documents = [],
+  profile
 }: {
   comparisonId: string;
   products: string[];
   parsed: Call1Output;
   documents?: StartDocument[];
+  profile?: CompanyProfile;
 }): StartResult {
   const comparability = normalizeComparability(parsed.comparability, products);
 
@@ -105,6 +108,7 @@ export function buildStartResponse({
     return {
       status: "incomparable",
       comparability,
+      ...(profile ? { profile } : {}),
       ...(parsed.detected_products ? { detected_products: parsed.detected_products } : {})
     };
   }
@@ -117,7 +121,8 @@ export function buildStartResponse({
     ...(parsed.detected_products ? { detected_products: parsed.detected_products } : {}),
     criteria: parsed.criteria,
     questions: parsed.questions,
-    comparability
+    comparability,
+    ...(profile ? { profile } : {})
   };
 }
 
