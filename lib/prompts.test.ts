@@ -36,6 +36,8 @@ describe("call2Prompt", () => {
     expect(instructions).toContain("Do NOT invent or estimate missing pricing numbers");
     expect(instructions).toContain("one entry per product");
     expect(instructions).toContain("tier_name");
+    expect(instructions).toContain("JSON boolean true or false");
+    expect(instructions).toContain('not the strings "true" or "false"');
   });
 
   it("fences uploaded document text as untrusted evidence and allows uploaded attribution", () => {

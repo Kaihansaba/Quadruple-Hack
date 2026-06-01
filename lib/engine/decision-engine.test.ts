@@ -3,6 +3,107 @@ import { demoComparison } from "@/lib/fixtures/demo-comparison";
 import { redistributeWeight, runDecisionEngine } from "./decision-engine";
 
 describe("decision engine", () => {
+  const hardGateFixture = (rawValue?: string | boolean) => ({
+    comparisonId: "hard-gate-fixture",
+    title: "Vendor A vs Vendor B",
+    products: [
+      { id: "vendor_a", name: "Vendor A", url: "" },
+      { id: "vendor_b", name: "Vendor B", url: "" }
+    ],
+    criteria: [
+      {
+        id: "european_hq",
+        name: "European headquarters",
+        unit: "boolean",
+        direction: "higher" as const,
+        type: "hard" as const,
+        weight: null
+      },
+      {
+        id: "fit",
+        name: "Fit",
+        unit: "score_0_10",
+        direction: "higher" as const,
+        type: "soft" as const,
+        weight: 1
+      }
+    ],
+    extractedValues: [
+      ...(rawValue === undefined
+        ? []
+        : [
+            {
+              id: "ev_hard",
+              productId: "vendor_a",
+              criterionId: "european_hq",
+              rawValue,
+              sourceUrl: "https://example.com/vendor-a",
+              sourceType: "spec" as const,
+              confidence: 0.95
+            }
+          ]),
+      {
+        id: "ev_soft_a",
+        productId: "vendor_a",
+        criterionId: "fit",
+        rawValue: 8,
+        sourceUrl: "https://example.com/vendor-a",
+        sourceType: "spec" as const,
+        confidence: 0.95
+      },
+      {
+        id: "ev_soft_b",
+        productId: "vendor_b",
+        criterionId: "fit",
+        rawValue: 7,
+        sourceUrl: "https://example.com/vendor-b",
+        sourceType: "spec" as const,
+        confidence: 0.95
+      }
+    ]
+  });
+
+  it("passes hard criteria when the model returns a string true value", () => {
+    const result = runDecisionEngine(hardGateFixture("true"));
+
+    expect(result.eliminated).toEqual([]);
+    expect(result.rankings.find((ranking) => ranking.productId === "vendor_a")).toEqual(
+      expect.objectContaining({ eliminated: false })
+    );
+  });
+
+  it("passes hard criteria when the model returns a boolean true value", () => {
+    const result = runDecisionEngine(hardGateFixture(true));
+
+    expect(result.eliminated).toEqual([]);
+    expect(result.rankings.find((ranking) => ranking.productId === "vendor_a")).toEqual(
+      expect.objectContaining({ eliminated: false })
+    );
+  });
+
+  it("eliminates only on explicit hard-criterion false evidence", () => {
+    const result = runDecisionEngine(hardGateFixture("false"));
+
+    expect(result.eliminated).toContainEqual(
+      expect.objectContaining({
+        productId: "vendor_a",
+        criterionId: "european_hq"
+      })
+    );
+  });
+
+  it("does not eliminate when hard-criterion evidence is missing", () => {
+    const result = runDecisionEngine(hardGateFixture());
+
+    expect(result.eliminated).toEqual([]);
+    expect(result.cells.find((cell) => cell.productId === "vendor_a" && cell.criterionId === "european_hq")).toEqual(
+      expect.objectContaining({
+        missing: true,
+        normalizedValue: null
+      })
+    );
+  });
+
   it("eliminates products that fail hard criteria before scoring", () => {
     const result = runDecisionEngine(demoComparison);
 

@@ -98,13 +98,15 @@ function reconcile(input: DecisionEngineInput): ReconciledCell[] {
         .map((value) => ({ value, numeric: toNumber(value, criterion) }))
         .filter((item): item is { value: ExtractedValue; numeric: number } => item.numeric !== null);
       if (numericValues.length === 0) {
+        const hardUnparseable = criterion.type === "hard";
         return {
           ...emptyCell(product.id, criterion.id),
           rawValue: values[0].rawValue,
           sourceUrl: values[0].sourceUrl,
           sourceType: values[0].sourceType,
           confidence: values[0].confidence,
-          missing: false
+          imputed: hardUnparseable,
+          missing: hardUnparseable
         };
       }
 
@@ -214,18 +216,21 @@ function applyDealbreakers(
       const cell = cells.find(
         (item) => item.productId === product.id && item.criterionId === criterion.id
       );
-      const passes = (cell?.normalizedValue ?? 0) >= 1;
-      return passes
-        ? []
-        : [
-            {
-              productId: product.id,
-              productName: product.name,
-              criterionId: criterion.id,
-              criterionName: criterion.name,
-              reason: `${product.name} does not satisfy ${criterion.name}.`
-            }
-          ];
+      const explicitFailure =
+        cell &&
+        !cell.missing &&
+        !cell.imputed &&
+        !cell.sourcesDisagree &&
+        cell.normalizedValue === 0;
+      return explicitFailure
+        ? [{
+            productId: product.id,
+            productName: product.name,
+            criterionId: criterion.id,
+            criterionName: criterion.name,
+            reason: `${product.name} does not satisfy ${criterion.name}.`
+          }]
+        : [];
     })
   );
 }
@@ -321,6 +326,11 @@ function toNumber(value: ExtractedValue, criterion: Criterion): number | null {
   }
   if (typeof value.rawValue === "boolean") {
     return value.rawValue ? 1 : 0;
+  }
+  const raw = value.rawValue.trim().toLowerCase();
+  if (criterion.type === "hard" || criterion.unit.toLowerCase() === "boolean") {
+    if (raw === "true") return 1;
+    if (raw === "false") return 0;
   }
   const parsed = Number.parseFloat(value.rawValue.replace(/[^0-9.-]/g, ""));
   return Number.isFinite(parsed) ? parsed : null;

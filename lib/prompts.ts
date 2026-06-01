@@ -49,7 +49,7 @@ export type Call2Output = {
   extracted_values: Array<{
     product_name: string;
     criterion_id: string;
-    raw_value: string;
+    raw_value: string | number | boolean;
     source_url: string;
     source_type: "spec" | "expert_review" | "user_review" | "vendor_claim" | "uploaded_document";
     confidence: number;
@@ -395,7 +395,7 @@ export function call2Prompt(
     
     Raw value format
     - score_0_10 criteria: assign a numeric score 0–10 based on evidence.
-    - Boolean criteria: raw_value must be exactly "true" or "false".
+    - Boolean criteria: raw_value must be the JSON boolean true or false, not the strings "true" or "false".
     - Hard criteria: use raw_value "false" ONLY when evidence clearly shows the product fails the requirement. If unavailable or ambiguous, omit the entry instead of guessing false.
     ${uploadedDocumentEvidence ? `
     Document evidence
