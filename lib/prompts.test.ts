@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { call2Prompt, type Call1Output, type CompanyProfile } from "./prompts";
+import { call2Prompt, call3Prompt, type Call1Output, type CompanyProfile } from "./prompts";
 
 const profile: CompanyProfile = {
   name: "Meridian Software",
@@ -35,6 +35,7 @@ describe("call2Prompt", () => {
     expect(instructions).toContain('"unknown"');
     expect(instructions).toContain("Do NOT invent or estimate missing pricing numbers");
     expect(instructions).toContain("one entry per product");
+    expect(instructions).toContain("tier_name");
   });
 
   it("fences uploaded document text as untrusted evidence and allows uploaded attribution", () => {
@@ -68,5 +69,38 @@ describe("call2Prompt", () => {
     expect(call2Prompt(["Nimbus CRM"], criteria, [], profile)).toBe(
       call2Prompt(["Nimbus CRM"], criteria, [], profile, [])
     );
+  });
+});
+
+describe("call3Prompt", () => {
+  it("passes source URLs into verdict evidence for cited recommendations", () => {
+    const prompt = JSON.parse(
+      call3Prompt(
+        "Nimbus CRM",
+        "LedgerFlow",
+        [
+          {
+            id: "annual_cost",
+            name: "Annual cost",
+            unit: "USD/year",
+            direction: "lower"
+          }
+        ],
+        [
+          {
+            product: "Nimbus CRM",
+            criterion: "Annual cost",
+            raw_value: "48000",
+            source_type: "spec",
+            source_url: "https://example.com/nimbus/pricing"
+          }
+        ],
+        [],
+        profile
+      )
+    );
+
+    expect(prompt.evidence[0].source_url).toBe("https://example.com/nimbus/pricing");
+    expect(prompt.instructions.join("\n")).toContain("source_url");
   });
 });

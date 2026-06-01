@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { computeRobustness } from "@/lib/engine/robustness";
+import { getStoredComparison } from "@/lib/server-comparison-store";
 import type { Criterion } from "@/lib/engine/types";
 import type { RobustnessBody } from "@/lib/api-types";
 
@@ -22,12 +23,23 @@ function weightsFromCriteria(criteria: Criterion[]) {
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  await params;
+  const { id } = await params;
 
-  const body: RobustnessBody = await req.json();
-  const band = clampBand(body.band);
-  const weights = body.weights ?? weightsFromCriteria(body.engineInput.criteria);
-  const robustness = computeRobustness(body.engineInput, body.engineInput.criteria, weights, {
+  const body: Partial<RobustnessBody> = await req.json();
+  const stored = getStoredComparison(id);
+  const engineInput = stored?.engineInput ?? body.engineInput;
+
+  if (!engineInput) {
+    return NextResponse.json(
+      { error: "Comparison state not found. Please rerun the comparison." },
+      { status: 404 }
+    );
+  }
+
+  const band = clampBand(body.band ?? 0.4);
+  const criteria = stored?.criteria ?? engineInput.criteria;
+  const weights = body.weights ?? weightsFromCriteria(criteria);
+  const robustness = computeRobustness(engineInput, criteria, weights, {
     band,
     iterations: robustnessIterations()
   });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { jsonCall, narrateCall } from "@/lib/openrouter";
 import { runDecisionEngine } from "@/lib/engine/decision-engine";
 import { redistributeWeight } from "@/lib/engine/decision-engine";
+import { getStoredComparison, updateStoredComparison } from "@/lib/server-comparison-store";
 import type { DecisionEngineInput, Criterion } from "@/lib/engine/types";
 import type { ChatBody, ChatResponse } from "@/lib/api-types";
 import type { Call1Output } from "@/lib/prompts";
@@ -14,10 +15,34 @@ type ChatRequestBody = ChatBody & {
 };
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  await params;
+  const { id } = await params;
 
   const body: ChatRequestBody = await req.json();
-  const { message, engineInput, criteria, currentWeights, history } = body;
+  const stored = getStoredComparison(id);
+  const message = body.message;
+  const engineInput = stored?.engineInput ?? body.engineInput;
+  const criteria = stored?.criteria ?? body.criteria;
+  const currentWeights =
+    stored?.criteria
+      ? Object.fromEntries(
+          stored.criteria
+            .filter((criterion) => criterion.type === "soft")
+            .map((criterion) => [criterion.id, criterion.weight ?? 0])
+        )
+      : body.currentWeights;
+  const history = stored?.messages?.map((item) => ({ role: item.role, content: item.content })) ?? body.history;
+
+  if (!engineInput || !criteria || !currentWeights) {
+    return NextResponse.json(
+      {
+        reply: "This comparison is missing the original scoring data, so I can't refine it. Please rerun the comparison.",
+        result: null,
+        criteria: null,
+        products: null
+      },
+      { status: 404 }
+    );
+  }
 
   // Ask the model to interpret the message as a weight adjustment or just a question
   const interpretPrompt = JSON.stringify({
@@ -69,6 +94,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     updatedResult = runDecisionEngine(updatedInput);
     updatedCriteria = newCriteria;
     updatedProducts = engineInput.products.map((p) => ({ id: p.id, name: p.name }));
+    updateStoredComparison(id, {
+      engineInput: updatedInput,
+      criteria: newCriteria,
+      products: updatedProducts,
+      result: updatedResult
+    });
   }
 
   // Generate reply
@@ -104,6 +135,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     criteria: updatedCriteria,
     products: updatedProducts
   };
+
+  const latest = getStoredComparison(id);
+  if (latest) {
+    updateStoredComparison(id, {
+      messages: [
+        ...latest.messages,
+        { role: "user", content: message, createdAt: new Date().toISOString() },
+        { role: "assistant", content: reply, createdAt: new Date().toISOString() }
+      ]
+    });
+  }
 
   return NextResponse.json(response);
 }

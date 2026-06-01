@@ -68,7 +68,12 @@ export type PricingModel = {
   per_unit_price: number | null;
   unit: string | null;
   period: "month" | "year" | null;
-  tiers: Array<{ up_to_units: number | null; unit_price: number; flat_price: number | null }> | null;
+  tiers: Array<{
+    up_to_units: number | null;
+    unit_price: number;
+    flat_price: number | null;
+    tier_name?: string;
+  }> | null;
   minimum: number | null;
   notes: string | null;
   source_url: string | null;
@@ -407,8 +412,9 @@ export function call2Prompt(
     - currency should be an ISO currency code such as "USD" or "EUR" when evidenced; use "unknown" when no currency is evidenced.
     - base_price is the flat/base component per period, if any. per_unit_price is the price per unit per period, if any.
     - unit is the billed unit, e.g. "seat", "user", "GB", "transaction", or null when unknown.
+    - Use one unit consistently inside each pricing_model. If pricing is per GB-month, set unit "GB", unit_price per GB, and tier up_to_units in GB. If you convert to TB, convert both unit_price and up_to_units to TB.
     - period is "month", "year", or null when no billing period is evidenced.
-    - tiers is null unless tiered pricing is evidenced. If present, each tier must include up_to_units (number or null for unlimited/open-ended), unit_price, and flat_price.
+    - tiers is null unless tiered pricing is evidenced. If present, each tier must include up_to_units (number or null for unlimited/open-ended), unit_price, flat_price, and tier_name when the tier has a public name.
     - minimum is the evidenced minimum spend/commitment, or null.
     - notes should briefly explain ambiguous pricing, contact-sales pricing, enterprise-only pricing, discounts, or missing public pricing.
     - source_url must be the strongest source for the pricing model, or null if no pricing source exists.
@@ -423,7 +429,7 @@ export function call2Prompt(
     Return ONLY valid JSON — no markdown, no code fences, no commentary — with keys: extracted_values (array), pricing_models (array), and proposed_weights (object).
     CRITICAL: criterion_id MUST be copied EXACTLY from valid_criterion_ids. Do NOT invent or rename IDs. Valid IDs are: ${criteria.map((c) => c.id).join(", ")}.
     extracted_values: one entry per (product, criterion) pair with fields: product_name (exact match to products list), criterion_id (exact match to valid_criterion_ids), raw_value (string), source_url, source_type (${allowedSourceTypes}), confidence (0–1).
-    pricing_models: one entry per product with fields: product_name (exact match to products list), pricing_model (object with fields type, currency, base_price, per_unit_price, unit, period, tiers, minimum, notes, source_url, confidence).
+    pricing_models: one entry per product with fields: product_name (exact match to products list), pricing_model (object with fields type, currency, base_price, per_unit_price, unit, period, tiers, minimum, notes, source_url, confidence). Tier objects may include tier_name.
     </output>
     `
     ]    
@@ -439,6 +445,7 @@ export function call3Prompt(
     criterion: string;
     raw_value: string | number | boolean | null;
     source_type: string | null;
+    source_url: string | null;
   }>,
   eliminated: Array<{ productName: string; criterionName: string }>,
   profile: CompanyProfile
@@ -458,7 +465,7 @@ export function call3Prompt(
       "Paragraph 1: why the recommended product is the better fit — its 2-3 strongest concrete advantages, with the actual values.",
       "Paragraph 2: the main tradeoff or where the runner-up is stronger, and (if any) why eliminated products were ruled out.",
       "ABSOLUTELY DO NOT mention scores, weights, percentages, points, 'contributions', or any internal scoring math. Talk only about the products themselves.",
-      "Be specific and cite the real values. Reference the company name naturally at most once.",
+      "Be specific and cite the real values. When a source_url is available for an important claim, include it briefly in parentheses after that claim. Reference the company name naturally at most once.",
       "Return plain text only."
     ]
   });

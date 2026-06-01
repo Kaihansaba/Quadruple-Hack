@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runDecisionEngine } from "@/lib/engine/decision-engine";
 import { computeRobustness } from "@/lib/engine/robustness";
+import { getStoredComparison, updateStoredComparison } from "@/lib/server-comparison-store";
 import type { DecisionEngineInput, Criterion } from "@/lib/engine/types";
 import type { ReweightBody, ReweightResponse } from "@/lib/api-types";
 
@@ -18,14 +19,24 @@ function weightsFromCriteria(criteria: Criterion[]) {
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  await params;
+  const { id } = await params;
 
   const body: ReweightBody & {
-    engineInput: DecisionEngineInput;
-    criteria: Criterion[];
+    engineInput?: DecisionEngineInput;
+    criteria?: Criterion[];
   } = await req.json();
 
-  const { weights, engineInput, criteria } = body;
+  const stored = getStoredComparison(id);
+  const { weights } = body;
+  const engineInput = stored?.engineInput ?? body.engineInput;
+  const criteria = stored?.criteria ?? body.criteria ?? engineInput?.criteria;
+
+  if (!engineInput || !criteria) {
+    return NextResponse.json(
+      { error: "Comparison state not found. Please rerun the comparison." },
+      { status: 404 }
+    );
+  }
 
   const updatedCriteria: Criterion[] = criteria.map((c) => ({
     ...c,
@@ -48,6 +59,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     products: engineInput.products.map((p) => ({ id: p.id, name: p.name })),
     robustness
   };
+
+  updateStoredComparison(id, {
+    engineInput: updatedInput,
+    criteria: updatedCriteria,
+    products: response.products,
+    result,
+    robustness
+  });
 
   return NextResponse.json(response);
 }

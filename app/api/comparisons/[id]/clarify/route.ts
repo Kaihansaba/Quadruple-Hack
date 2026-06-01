@@ -5,6 +5,7 @@ import { DEMO_PROFILE } from "@/lib/demo-profile";
 import { sanitizeCall1OutputForProfile } from "@/lib/criteria-sanitizer";
 import { runDecisionEngine } from "@/lib/engine/decision-engine";
 import { computeRobustness } from "@/lib/engine/robustness";
+import { saveStoredComparison } from "@/lib/server-comparison-store";
 import type { DecisionEngineInput, ExtractedValue, Criterion } from "@/lib/engine/types";
 import type { ClarifyBody, ClarifyResponse, DocumentPage, StartProduct } from "@/lib/api-types";
 
@@ -57,12 +58,84 @@ function productDocuments(products: StartProduct[]) {
     }));
 }
 
-function pricingModelFor(productName: string, call2: Call2Output): PricingModel | undefined {
-  return call2.pricing_models?.find((entry) => entry.product_name === productName)?.pricing_model;
+function pricingModelFor(
+  productName: string,
+  call2: Call2Output,
+  criteria: Call1Output["criteria"]
+): PricingModel | undefined {
+  const target = normalizeProductName(productName);
+  return (
+    call2.pricing_models?.find((entry) => normalizeProductName(entry.product_name) === target)?.pricing_model ??
+    derivePricingModelFromExtractedValue(productName, call2, criteria)
+  );
+}
+
+function normalizeProductName(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function findEngineProduct(products: Array<{ id: string; name: string }>, productName: string) {
+  const target = normalizeProductName(productName);
+  return products.find((product) => normalizeProductName(product.name) === target);
+}
+
+function isPriceCriterion(criterion: Call1Output["criteria"][number]) {
+  return /\b(price|pricing|cost|subscription|license|annual)\b/i.test(
+    `${criterion.id} ${criterion.name} ${criterion.unit}`
+  ) || /\b(usd|eur|gbp)\b|\$/i.test(criterion.unit);
+}
+
+function parsePriceAmount(rawValue: string) {
+  const match = rawValue.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const amount = Number(match[0]);
+  return Number.isFinite(amount) && amount >= 0 ? amount : null;
+}
+
+function derivePricingModelFromExtractedValue(
+  productName: string,
+  call2: Call2Output,
+  criteria: Call1Output["criteria"]
+): PricingModel | undefined {
+  const target = normalizeProductName(productName);
+  const priceCriterionIds = new Set(criteria.filter(isPriceCriterion).map((criterion) => criterion.id));
+  if (priceCriterionIds.size === 0) return undefined;
+
+  const priceEvidence = call2.extracted_values
+    .filter(
+      (value) =>
+        normalizeProductName(value.product_name) === target &&
+        priceCriterionIds.has(value.criterion_id)
+    )
+    .sort((a, b) => b.confidence - a.confidence)[0];
+  if (!priceEvidence) return undefined;
+
+  const rawValue = String(priceEvidence.raw_value);
+  const amount = parsePriceAmount(rawValue);
+  if (amount === null) return undefined;
+
+  const period = /\b(month|monthly|mo)\b|\/mo\b/i.test(rawValue) ? "month" : "year";
+  const unitMatch = rawValue.match(/\b(seat|user|license)\b/i);
+  const unit = unitMatch?.[1].toLowerCase() ?? null;
+  const isPerUnit = Boolean(unit && /\b(per|\/)\s*(seat|user|license)\b|\/(seat|user|license)\b/i.test(rawValue));
+
+  return {
+    type: isPerUnit ? "per_seat" : "flat",
+    currency: /\bEUR\b|€/i.test(rawValue) ? "EUR" : /\bGBP\b|£/i.test(rawValue) ? "GBP" : "USD",
+    base_price: isPerUnit ? 0 : amount,
+    per_unit_price: isPerUnit ? amount : null,
+    unit,
+    period,
+    tiers: null,
+    minimum: null,
+    notes: `Derived from extracted ${priceEvidence.criterion_id} evidence: ${rawValue}`,
+    source_url: priceEvidence.source_url,
+    confidence: Math.min(priceEvidence.confidence, 0.7)
+  };
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  await params;
+  const { id: comparisonId } = await params;
 
   const body: ClarifyBody & {
     products: StartProduct[];
@@ -128,7 +201,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // Build engine input
   const engineProducts = products.map((p, i) => {
-    const pricingModel = pricingModelFor(p.name, call2);
+    const pricingModel = pricingModelFor(p.name, call2, criteria);
     return {
       id: `prod_${i}`,
       name: p.name,
@@ -156,21 +229,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       : c
   );
 
-  const extractedValues: ExtractedValue[] = call2.extracted_values.map((ev, i) => {
-    const product = engineProducts.find((p) => p.name === ev.product_name);
-    return {
+  const extractedValues: ExtractedValue[] = call2.extracted_values.flatMap((ev, i) => {
+    const product = findEngineProduct(engineProducts, ev.product_name);
+    if (!product) {
+      return [];
+    }
+
+    return [{
       id: `ev_${i}`,
-      productId: product?.id ?? `prod_0`,
+      productId: product.id,
       criterionId: ev.criterion_id,
       rawValue: ev.raw_value,
       sourceUrl: ev.source_url,
       sourceType: ev.source_type,
       confidence: ev.confidence
-    };
+    }];
   });
 
+  const droppedEvidenceCount = call2.extracted_values.length - extractedValues.length;
+  if (droppedEvidenceCount > 0) {
+    console.warn(
+      `[comparison:${comparisonId}] Dropped ${droppedEvidenceCount} extracted value(s) with unknown product names.`
+    );
+  }
+
   const engineInput: DecisionEngineInput = {
-    comparisonId: `cmp_${Date.now()}`,
+    comparisonId,
     title: products.map((p) => p.name).join(" vs "),
     products: engineProducts,
     criteria: normalizedCriteria,
@@ -212,7 +296,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         product: productName(cell.productId),
         criterion: criterionName(cell.criterionId),
         raw_value: cell.rawValue,
-        source_type: cell.sourceType
+        source_type: cell.sourceType,
+        source_url: cell.sourceUrl
       }));
 
     try {
@@ -251,6 +336,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     robustness,
     engineInput
   };
+
+  saveStoredComparison(comparisonId, {
+    engineInput,
+    criteria: normalizedCriteria,
+    products: response.products,
+    result,
+    robustness,
+    verdict,
+    messages: []
+  });
 
   return NextResponse.json(response);
 }
