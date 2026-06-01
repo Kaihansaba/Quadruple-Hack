@@ -11,6 +11,7 @@ import { useColorScheme } from "@/lib/use-color-scheme";
 import BoxLoader from "@/components/ui/box-loader";
 import LightRays from "@/components/ui/light-rays";
 import ProductLogo from "@/components/ui/product-logo";
+import { AnimatedText } from "@/components/ui/animated-underline-text-one";
 
 type AttachmentStatus = "parsing" | "parsed" | "no_text" | "error";
 
@@ -431,10 +432,15 @@ export function HomeClient() {
       ) : (
         <>
       <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center">
-        <div className="mb-9 flex items-center gap-2 rounded-full border border-blue-400/30 light:border-blue-600/30 bg-blue-400/10 light:bg-blue-50 px-3 py-1.5 text-sm text-blue-300 light:text-blue-700 backdrop-blur-md">
-          <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" />
-          <strong className="font-semibold">{greeting}</strong>
-        </div>
+        <AnimatedText
+          text={greeting}
+          textClassName="text-lg font-semibold text-blue-300 light:text-blue-700"
+          underlineClassName="text-blue-400 light:text-blue-600"
+          underlinePath="M 0,10 Q 75,0 150,10 Q 225,20 300,10"
+          underlineHoverPath="M 0,10 Q 75,20 150,10 Q 225,0 300,10"
+          underlineDuration={1.2}
+          className="mb-9"
+        />
 
         <h1
           className="mb-8 max-w-2xl text-center text-4xl font-bold leading-tight tracking-tight sm:text-5xl"
