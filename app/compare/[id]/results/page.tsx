@@ -17,7 +17,7 @@ import {
   CartesianGrid
 } from "recharts";
 import { redistributeWeight } from "@/lib/engine/decision-engine";
-import { computeTco, type PricingModel, type TcoProduct } from "@/lib/engine/tco";
+import { computeTco, convertQuantity, type PricingModel, type TcoProduct } from "@/lib/engine/tco";
 import { parseSessionData, readSessionData, saveSessionData } from "@/lib/session-data";
 import { upsertComparisonHistory } from "@/lib/comparison-history";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -41,6 +41,7 @@ const COLORS = ["#2d71bf", "#ef4444", "#f59e0b", "#a855f7", "#10b981"];
 const MIN_ROBUSTNESS_BAND = 0.15;
 const MAX_ROBUSTNESS_BAND = 0.6;
 const DEFAULT_PRIORITY_FIRMNESS = 44;
+type StorageUnit = "mb" | "gb" | "tb" | "pb";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -161,6 +162,10 @@ function pricingSource(product: TcoProduct) {
   return model?.source_url ?? null;
 }
 
+function tierOptionValue(tier: NonNullable<PricingModel["tiers"]>[number]) {
+  return tier.tier_name ?? `${tier.unit_price}/unit`;
+}
+
 function documentCitationLabel(sourceUrl: string | null) {
   const pageMatch = sourceUrl?.match(/\bp\.?\s*(\d+)\b/i);
   return pageMatch
@@ -176,6 +181,131 @@ function displayTierUsed(product: TcoProduct, tierUsed: string | null) {
     (tier) => tier.unit_price === model.per_unit_price && (tier.flat_price ?? 0) === (model.base_price ?? 0)
   );
   return matchingTier?.tier_name ?? "Model price";
+}
+
+function displayUnit(unit: string | null | undefined) {
+  if (!unit) return "units";
+  const normalized = unit.trim();
+  const storage = storageUnitKey(normalized);
+  if (storage) return storage.toUpperCase();
+  return normalized.toLowerCase();
+}
+
+function storageUnitKey(unit: string | null | undefined): StorageUnit | null {
+  const normalized = unit?.toLowerCase().replace(/[^a-z]/g, "") ?? "";
+  if (!normalized) return null;
+  if (normalized.includes("pb") || normalized.includes("pib") || normalized.includes("petabyte")) return "pb";
+  if (normalized.includes("tb") || normalized.includes("tib") || normalized.includes("terabyte")) return "tb";
+  if (normalized.includes("gb") || normalized.includes("gib") || normalized.includes("gigabyte")) return "gb";
+  if (normalized.includes("mb") || normalized.includes("mib") || normalized.includes("megabyte")) return "mb";
+  return null;
+}
+
+function preferredUsageUnit(units: string[]) {
+  const storageUnits = units.map(storageUnitKey).filter((unit): unit is StorageUnit => Boolean(unit));
+  if (storageUnits.length > 0) {
+    const order = ["mb", "gb", "tb", "pb"];
+    return storageUnits.sort((a, b) => order.indexOf(a) - order.indexOf(b))[0].toUpperCase();
+  }
+
+  return displayUnit(units[0]);
+}
+
+function tcoUsageInfo(products: TcoProduct[], currentQuantity: number) {
+  const units = products
+    .map((product) => product.pricing_model?.unit)
+    .filter((unit): unit is string => Boolean(unit?.trim()));
+  const unit = preferredUsageUnit(units.length > 0 ? units : ["unit"]);
+  const lower = unit.toLowerCase();
+  const isStorage = Boolean(storageUnitKey(lower)) || /\bstorage\b/.test(lower);
+  const isSeatLike = /\b(seat|user|license|member|employee)\b/.test(lower);
+  const isRequestLike = /\b(request|transaction|api|call|operation)\b/.test(lower);
+
+  return {
+    label: isStorage
+      ? "Storage volume"
+      : isSeatLike
+        ? "Seats"
+        : isRequestLike
+          ? "Usage volume"
+          : "Usage quantity",
+    unit: displayUnit(unit),
+    growthLabel: isStorage ? "Annual storage growth" : isSeatLike ? "Annual seat growth" : "Annual usage growth",
+    max: Math.max(currentQuantity, isStorage && storageUnitKey(lower) === "gb" ? 1000000 : isStorage ? 1000 : isRequestLike ? 100000 : 500),
+    step: isStorage ? 1 : isRequestLike ? 100 : 1
+  };
+}
+
+function numericCost(raw: string | number | boolean | null | undefined) {
+  if (typeof raw === "number") return Number.isFinite(raw) && raw > 0 ? raw : null;
+  if (typeof raw !== "string") return null;
+  const match = raw.replace(/,/g, "").match(/\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const value = Number(match[0]);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function annualCostMultiplier(criterion: Call1Output["criteria"][number]) {
+  const text = `${criterion.name} ${criterion.unit}`;
+  return /\b(month|monthly|mo)\b|\/mo\b/i.test(text) ? 12 : 1;
+}
+
+function annualUnitPrice(model: PricingModel) {
+  let unitPrice: number | null = null;
+
+  if ((model.type === "per_seat" || model.type === "usage_based") && model.per_unit_price !== null) {
+    unitPrice = model.per_unit_price;
+  }
+
+  if (model.type === "tiered" && model.tiers?.length) {
+    const firstPaidTier = model.tiers.find((tier) => tier.unit_price > 0);
+    unitPrice = firstPaidTier?.unit_price ?? null;
+  }
+
+  if (unitPrice === null || unitPrice <= 0) return null;
+  return model.period === "month" ? unitPrice * 12 : unitPrice;
+}
+
+function inferTcoQuantity(response: ClarifyResponse) {
+  const engineInput = response.engineInput;
+  if (!engineInput) return null;
+
+  const priceCriterion = findPriceCriterion(response.criteria);
+  if (!priceCriterion) return null;
+
+  const tcoProducts = engineInput.products.map((product) => {
+    const model = product.rawMetadata?.pricing_model;
+    return {
+      id: product.id,
+      name: product.name,
+      pricing_model: isPricingModel(model) ? model : null
+    };
+  });
+  const displayUnit = tcoUsageInfo(tcoProducts, 40).unit;
+
+  const estimates = engineInput.products.flatMap((product) => {
+    const model = product.rawMetadata?.pricing_model;
+    if (!isPricingModel(model)) return [];
+
+    const annualPerUnit = annualUnitPrice(model);
+    if (!annualPerUnit) return [];
+
+    const cell = response.result.cells.find(
+      (item) => item.productId === product.id && item.criterionId === priceCriterion.id && !item.missing
+    );
+    const cost = numericCost(cell?.rawValue);
+    if (!cost) return [];
+
+    const quantity = (cost * annualCostMultiplier(priceCriterion)) / annualPerUnit;
+    const displayQuantity = convertQuantity(quantity, model.unit, displayUnit);
+    return Number.isFinite(displayQuantity) && displayQuantity >= 1 && displayQuantity < 1_000_000_000
+      ? [displayQuantity]
+      : [];
+  });
+
+  if (estimates.length === 0) return null;
+  const sorted = estimates.sort((a, b) => a - b);
+  return Math.max(1, Math.round(sorted[Math.floor(sorted.length / 2)]));
 }
 
 // The recommended product's two strongest soft criteria, with their real values.
@@ -302,6 +432,8 @@ export default function ResultsPage() {
       setProducts(parsed.products);
       setVerdict(parsed.verdict);
       setRobustness(parsed.robustness ?? null);
+      const inferredTcoQuantity = inferTcoQuantity(parsed);
+      if (inferredTcoQuantity) setTcoSeats(inferredTcoQuantity);
       const w: Record<string, number> = {};
       for (const c of parsed.criteria) {
         if (c.type === "soft") w[c.id] = c.weight ?? 0;
@@ -1208,6 +1340,26 @@ export default function ResultsPage() {
           </div>
         </motion.div>
 
+        <CostSimulationPanel
+          products={tcoProducts}
+          seats={tcoSeats}
+          growthRatePct={tcoGrowthRate}
+          years={tcoYears}
+          selectedTiers={tcoSelectedTiers}
+          onSeatsChange={setTcoSeats}
+          onGrowthRateChange={setTcoGrowthRate}
+          onYearsChange={setTcoYears}
+          onTierChange={(productId, tierName) =>
+            setTcoSelectedTiers((prev) => {
+              const next = { ...prev };
+              if (tierName) next[productId] = tierName;
+              else delete next[productId];
+              return next;
+            })
+          }
+          colorScheme={colorScheme}
+        />
+
         {/* Chat */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -1291,25 +1443,6 @@ export default function ResultsPage() {
             Export result as PDF
           </button>
         </div>
-        <CostSimulationPanel
-          products={tcoProducts}
-          seats={tcoSeats}
-          growthRatePct={tcoGrowthRate}
-          years={tcoYears}
-          selectedTiers={tcoSelectedTiers}
-          onSeatsChange={setTcoSeats}
-          onGrowthRateChange={setTcoGrowthRate}
-          onYearsChange={setTcoYears}
-          onTierChange={(productId, tierName) =>
-            setTcoSelectedTiers((prev) => {
-              const next = { ...prev };
-              if (tierName) next[productId] = tierName;
-              else delete next[productId];
-              return next;
-            })
-          }
-          colorScheme={colorScheme}
-        />
       </div>
       </main>
       <div className="memo-print-root">
@@ -1357,8 +1490,10 @@ function CostSimulationPanel({
   }, [seats, growthRatePct, years, selectedTiers]);
 
   const pricedProducts = products.filter((product) => product.pricing_model);
+  const usageInfo = tcoUsageInfo(pricedProducts, seats);
   const projection = computeTco(pricedProducts, {
-    seats: debouncedUsage.seats,
+    quantity: debouncedUsage.seats,
+    unit: usageInfo.unit,
     growthRatePct: debouncedUsage.growthRatePct,
     years: debouncedUsage.years,
     selectedTierByProduct: debouncedUsage.selectedTiers
@@ -1413,20 +1548,25 @@ function CostSimulationPanel({
             <div className="space-y-4">
               <label className="block">
                 <div className="mb-2 flex items-center justify-between text-sm">
-                  <span className="font-medium text-zinc-200 light:text-zinc-800">Seats</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={1000}
-                    value={seats}
-                    onChange={(event) => onSeatsChange(Math.max(1, Number(event.target.value) || 1))}
-                    className="w-20 rounded-lg border border-zinc-700 light:border-zinc-200 bg-zinc-900 light:bg-white px-2 py-1 text-right text-sm text-white light:text-zinc-900 outline-none"
-                  />
+                  <span className="font-medium text-zinc-200 light:text-zinc-800">{usageInfo.label}</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={usageInfo.max}
+                      step={usageInfo.step}
+                      value={seats}
+                      onChange={(event) => onSeatsChange(Math.max(1, Number(event.target.value) || 1))}
+                      className="w-24 rounded-lg border border-zinc-700 light:border-zinc-200 bg-zinc-900 light:bg-white px-2 py-1 text-right text-sm text-white light:text-zinc-900 outline-none"
+                    />
+                    <span className="min-w-9 text-xs text-zinc-500">{usageInfo.unit}</span>
+                  </div>
                 </div>
                 <input
                   type="range"
                   min={1}
-                  max={500}
+                  max={usageInfo.max}
+                  step={usageInfo.step}
                   value={seats}
                   onChange={(event) => onSeatsChange(Number(event.target.value))}
                   className="w-full accent-blue-500"
@@ -1435,7 +1575,7 @@ function CostSimulationPanel({
 
               <label className="block">
                 <div className="mb-2 flex items-center justify-between text-sm">
-                  <span className="font-medium text-zinc-200 light:text-zinc-800">Growth rate</span>
+                  <span className="font-medium text-zinc-200 light:text-zinc-800">{usageInfo.growthLabel}</span>
                   <input
                     type="number"
                     min={0}
@@ -1492,9 +1632,9 @@ function CostSimulationPanel({
                         onChange={(event) => onTierChange(product.id, event.target.value)}
                         className="w-full rounded-xl border border-zinc-700 light:border-zinc-200 bg-zinc-950 light:bg-white px-3 py-2 text-sm text-white light:text-zinc-900 outline-none"
                       >
-                        <option value="">Default ({defaultTier})</option>
+                        <option value="">Auto by {usageInfo.label.toLowerCase()} ({defaultTier})</option>
                         {tiers.map((tier) => (
-                          <option key={tier.tier_name ?? `${tier.unit_price}-${tier.flat_price}`} value={tier.tier_name ?? ""}>
+                          <option key={tierOptionValue(tier)} value={tierOptionValue(tier)}>
                             {(tier.tier_name ?? "Unnamed tier")} – {formatTierPrice(tier, model!)}
                           </option>
                         ))}

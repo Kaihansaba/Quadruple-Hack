@@ -24,7 +24,9 @@ export type TcoProduct = {
 };
 
 export type TcoUsage = {
-  seats: number;
+  seats?: number;
+  quantity?: number;
+  unit?: string | null;
   growthRatePct: number;
   years: number;
   selectedTierByProduct?: Record<string, string>;
@@ -37,6 +39,7 @@ export type TcoProjection = {
   perYear: Array<{
     year: number;
     seats: number;
+    quantity: number;
     annualCost: number;
     cumulativeCost: number;
   }>;
@@ -81,16 +84,135 @@ function tierLabel(tier: NonNullable<PricingModel["tiers"]>[number]) {
   return tier.tier_name ?? `${tier.unit_price}/unit`;
 }
 
+function storageUnitKey(unit: string | null | undefined) {
+  const normalized = unit?.toLowerCase().replace(/[^a-z]/g, "") ?? "";
+  if (!normalized) return null;
+  if (normalized.includes("pib")) return "pib";
+  if (normalized.includes("pb") || normalized.includes("petabyte")) return "pb";
+  if (normalized.includes("tib")) return "tib";
+  if (normalized.includes("tb") || normalized.includes("terabyte")) return "tb";
+  if (normalized.includes("gib")) return "gib";
+  if (normalized.includes("gb") || normalized.includes("gigabyte")) return "gb";
+  if (normalized.includes("mib")) return "mib";
+  if (normalized.includes("mb") || normalized.includes("megabyte")) return "mb";
+  return null;
+}
+
+function unitScaleToGb(unit: string | null | undefined) {
+  switch (storageUnitKey(unit)) {
+    case "mb":
+    case "mib":
+      return 0.001;
+    case "gb":
+    case "gib":
+      return 1;
+    case "tb":
+    case "tib":
+      return 1000;
+    case "pb":
+    case "pib":
+      return 1000000;
+    default:
+      return null;
+  }
+}
+
+export function convertQuantity(quantity: number, fromUnit: string | null | undefined, toUnit: string | null | undefined) {
+  const fromScale = unitScaleToGb(fromUnit);
+  const toScale = unitScaleToGb(toUnit);
+  if (fromScale !== null && toScale !== null) return (quantity * fromScale) / toScale;
+
+  const normalizedFrom = fromUnit?.trim().toLowerCase();
+  const normalizedTo = toUnit?.trim().toLowerCase();
+  if (!normalizedFrom || !normalizedTo || normalizedFrom === normalizedTo) return quantity;
+
+  return quantity;
+}
+
 function selectedTier(model: PricingModel, selectedName: string | undefined) {
   if (!selectedName || !model.tiers) return undefined;
-  return model.tiers.find((tier) => tier.tier_name?.toLowerCase() === selectedName.toLowerCase());
+  return model.tiers.find((tier) => tierLabel(tier).toLowerCase() === selectedName.toLowerCase());
+}
+
+function quantityFromTierLabel(value: string, fallbackUnit: string | null | undefined, modelUnit: string | null | undefined) {
+  const match = value.match(/(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?/);
+  if (!match) return null;
+  const quantity = Number(match[1]);
+  if (!Number.isFinite(quantity)) return null;
+  return convertQuantity(quantity, match[2] ?? fallbackUnit, modelUnit);
+}
+
+function inferredTierRange(
+  model: PricingModel,
+  tier: NonNullable<PricingModel["tiers"]>[number],
+  previousUpperBound: number | null
+) {
+  if (tier.up_to_units !== null) {
+    return { lowerExclusive: previousUpperBound, upperInclusive: tier.up_to_units };
+  }
+
+  const label = tier.tier_name?.toLowerCase() ?? "";
+  const rangeMatch = label.match(
+    /(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?\s*(?:-|to|\u2013|\u2014)\s*(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?/
+  );
+  if (rangeMatch) {
+    const lower = convertQuantity(Number(rangeMatch[1]), rangeMatch[2] ?? rangeMatch[4] ?? model.unit, model.unit);
+    const upper = convertQuantity(Number(rangeMatch[3]), rangeMatch[4] ?? rangeMatch[2] ?? model.unit, model.unit);
+    return { lowerExclusive: lower, upperInclusive: upper };
+  }
+
+  const firstMatch = label.match(/\b(?:first|up to|upto|through|under|less than)\s*\d/i);
+  if (firstMatch) {
+    return {
+      lowerExclusive: null,
+      upperInclusive: quantityFromTierLabel(label.slice(firstMatch.index), model.unit, model.unit)
+    };
+  }
+
+  const nextMatch = label.match(/\bnext\s*\d/i);
+  if (nextMatch && previousUpperBound !== null) {
+    const increment = quantityFromTierLabel(label.slice(nextMatch.index), model.unit, model.unit);
+    return {
+      lowerExclusive: previousUpperBound,
+      upperInclusive: increment === null ? null : previousUpperBound + increment
+    };
+  }
+
+  const overMatch = label.match(/\b(?:over|above|more than|greater than)\s*\d/i) ?? label.match(/\d+(?:\.\d+)?\s*[a-zA-Z]*\s*\+/);
+  if (overMatch) {
+    return {
+      lowerExclusive: quantityFromTierLabel(label.slice(overMatch.index), model.unit, model.unit),
+      upperInclusive: null
+    };
+  }
+
+  return { lowerExclusive: null, upperInclusive: null };
+}
+
+function tierForQuantity(model: PricingModel, quantity: number) {
+  if (!model.tiers?.length) return undefined;
+
+  let previousUpperBound: number | null = null;
+  const rangedTiers = model.tiers.map((tier) => {
+    const range = inferredTierRange(model, tier, previousUpperBound);
+    if (range.upperInclusive !== null) previousUpperBound = range.upperInclusive;
+    return { tier, ...range };
+  });
+  const hasRangeData = rangedTiers.some((tier) => tier.lowerExclusive !== null || tier.upperInclusive !== null);
+  if (!hasRangeData) return undefined;
+
+  const matchingTier = rangedTiers.find((range) => {
+    const aboveLowerBound = range.lowerExclusive === null || quantity > range.lowerExclusive;
+    const belowUpperBound = range.upperInclusive === null || quantity <= range.upperInclusive;
+    return aboveLowerBound && belowUpperBound;
+  });
+  if (matchingTier) return matchingTier.tier;
+
+  return undefined;
 }
 
 function defaultPaidTier(model: PricingModel) {
-  const paidTiers = (model.tiers ?? [])
-    .filter((tier) => !isFreeTier(tier))
-    .sort((a, b) => (a.unit_price + (a.flat_price ?? 0)) - (b.unit_price + (b.flat_price ?? 0)));
-  return paidTiers[0];
+  return (model.tiers ?? []).find((tier) => !isFreeTier(tier));
 }
 
 function activePrice(product: TcoProduct, usage: TcoUsage): ActivePrice | null {
@@ -98,8 +220,9 @@ function activePrice(product: TcoProduct, usage: TcoUsage): ActivePrice | null {
   if (!model || model.type === "unknown") return null;
 
   const currency = model.currency || "unknown";
+  const firstYearQuantity = quantityForYear(usage, 1, model.unit);
   const selected = selectedTier(model, usage.selectedTierByProduct?.[product.id]);
-  const tier = selected ?? (model.type === "tiered" ? defaultPaidTier(model) : undefined);
+  const tier = selected ?? (model.type === "tiered" ? tierForQuantity(model, firstYearQuantity) ?? defaultPaidTier(model) : undefined);
 
   if (tier) {
     return {
@@ -140,8 +263,13 @@ function activePrice(product: TcoProduct, usage: TcoUsage): ActivePrice | null {
   return null;
 }
 
-function seatsForYear(usage: TcoUsage, year: number) {
-  return Math.round(usage.seats * (1 + usage.growthRatePct / 100) ** (year - 1));
+function baseQuantity(usage: TcoUsage) {
+  return usage.quantity ?? usage.seats ?? 1;
+}
+
+function quantityForYear(usage: TcoUsage, year: number, targetUnit?: string | null) {
+  const displayQuantity = Math.round(baseQuantity(usage) * (1 + usage.growthRatePct / 100) ** (year - 1));
+  return convertQuantity(displayQuantity, usage.unit, targetUnit);
 }
 
 function unavailableProjection(product: TcoProduct): TcoProjection {
@@ -165,11 +293,11 @@ function projectProduct(product: TcoProduct, usage: TcoUsage): TcoProjection {
   let cumulativeCost = 0;
   const perYear = Array.from({ length: usage.years }, (_, index) => {
     const year = index + 1;
-    const seats = seatsForYear(usage, year);
-    const subtotal = seats * price.perUnitAnnual + price.flatAnnual;
+    const quantity = quantityForYear(usage, year, product.pricing_model?.unit);
+    const subtotal = quantity * price.perUnitAnnual + price.flatAnnual;
     const annualCost = price.minimumAnnual === null ? subtotal : Math.max(subtotal, price.minimumAnnual);
     cumulativeCost += annualCost;
-    return { year, seats, annualCost, cumulativeCost };
+    return { year, seats: quantity, quantity, annualCost, cumulativeCost };
   });
 
   return {

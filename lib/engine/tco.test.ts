@@ -103,6 +103,110 @@ describe("computeTco", () => {
     expect(hubspotProjection?.totalCost).toBe(157680);
   });
 
+  it("automatically selects the tier matching the current usage range", () => {
+    const storage: PricingModel = {
+      type: "tiered",
+      currency: "USD",
+      base_price: 0,
+      per_unit_price: null,
+      unit: "TB",
+      period: "month",
+      tiers: [
+        { up_to_units: 50, unit_price: 23, flat_price: 0, tier_name: "First 50 TB" },
+        { up_to_units: 500, unit_price: 22, flat_price: 0, tier_name: "Next 450 TB" },
+        { up_to_units: null, unit_price: 21, flat_price: 0, tier_name: "Over 500 TB" }
+      ],
+      minimum: null,
+      notes: null,
+      source_url: "https://example.com/storage-pricing",
+      confidence: 0.9
+    };
+
+    const [lowUsage] = computeTco([{ id: "storage", pricing_model: storage }], {
+      quantity: 40,
+      growthRatePct: 0,
+      years: 1
+    }).products;
+    const [midUsage] = computeTco([{ id: "storage", pricing_model: storage }], {
+      quantity: 100,
+      growthRatePct: 0,
+      years: 1
+    }).products;
+    const [highUsage] = computeTco([{ id: "storage", pricing_model: storage }], {
+      quantity: 700,
+      growthRatePct: 0,
+      years: 1
+    }).products;
+
+    expect(lowUsage.tierUsed).toBe("First 50 TB");
+    expect(midUsage.tierUsed).toBe("Next 450 TB");
+    expect(highUsage.tierUsed).toBe("Over 500 TB");
+  });
+
+  it("parses storage ranges from tier names and converts display units", () => {
+    const storage: PricingModel = {
+      type: "tiered",
+      currency: "USD",
+      base_price: 0,
+      per_unit_price: null,
+      unit: "GB",
+      period: "month",
+      tiers: [
+        { up_to_units: null, unit_price: 0.023, flat_price: 0, tier_name: "S3 Standard - First 50 TB" },
+        { up_to_units: null, unit_price: 0.022, flat_price: 0, tier_name: "S3 Standard - Next 450 TB" },
+        { up_to_units: null, unit_price: 0.021, flat_price: 0, tier_name: "S3 Standard - Over 500TB" }
+      ],
+      minimum: null,
+      notes: null,
+      source_url: "https://example.com/storage-pricing",
+      confidence: 0.9
+    };
+
+    const [smallUsage] = computeTco([{ id: "storage", pricing_model: storage }], {
+      quantity: 10,
+      unit: "GB",
+      growthRatePct: 0,
+      years: 1
+    }).products;
+    const [largeUsage] = computeTco([{ id: "storage", pricing_model: storage }], {
+      quantity: 700,
+      unit: "TB",
+      growthRatePct: 0,
+      years: 1
+    }).products;
+
+    expect(smallUsage.tierUsed).toBe("S3 Standard - First 50 TB");
+    expect(largeUsage.tierUsed).toBe("S3 Standard - Over 500TB");
+  });
+
+  it("allows manual tier override even when usage belongs to another tier", () => {
+    const storage: PricingModel = {
+      type: "tiered",
+      currency: "USD",
+      base_price: 0,
+      per_unit_price: null,
+      unit: "TB",
+      period: "month",
+      tiers: [
+        { up_to_units: 50, unit_price: 23, flat_price: 0, tier_name: "First 50 TB" },
+        { up_to_units: null, unit_price: 21, flat_price: 0, tier_name: "Over 500 TB" }
+      ],
+      minimum: null,
+      notes: null,
+      source_url: "https://example.com/storage-pricing",
+      confidence: 0.9
+    };
+
+    const [projection] = computeTco([{ id: "storage", pricing_model: storage }], {
+      quantity: 40,
+      growthRatePct: 0,
+      years: 1,
+      selectedTierByProduct: { storage: "Over 500 TB" }
+    }).products;
+
+    expect(projection.tierUsed).toBe("Over 500 TB");
+  });
+
   it("marks unknown pricing unavailable instead of fabricating cost", () => {
     const result = computeTco(
       [
