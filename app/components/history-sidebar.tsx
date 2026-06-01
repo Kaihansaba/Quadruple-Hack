@@ -9,6 +9,7 @@ import {
   type ComparisonHistoryItem
 } from "@/lib/comparison-history";
 import { ThemeToggle } from "./theme-toggle";
+import { DEMO_PROFILE } from "@/lib/demo-profile";
 
 const PROFILE_STORAGE_KEY = "verdict:profile-edits:v1";
 
@@ -23,7 +24,7 @@ export function HistorySidebar({
 }) {
   const [items, setItems] = useState<ComparisonHistoryItem[]>([]);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [profileName, setProfileName] = useState("Kaihan saba");
+  const [profileName, setProfileName] = useState(DEMO_PROFILE.name);
 
   useEffect(() => {
     function refresh() {

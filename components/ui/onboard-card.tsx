@@ -61,7 +61,15 @@ const OnboardCard = ({
   return (
     <div
       className={cn("relative overflow-hidden", className)}
-      style={{ height: STRIDE * 3 }}
+      style={{
+        height: STRIDE * 3,
+        // Fade the column to true transparency at top and bottom so the edge
+        // cards blend into whatever is behind the card — no opaque overlay band.
+        maskImage:
+          "linear-gradient(to bottom, transparent, black 28%, black 72%, transparent)",
+        WebkitMaskImage:
+          "linear-gradient(to bottom, transparent, black 28%, black 72%, transparent)",
+      }}
     >
       <motion.div
         className="flex flex-col items-stretch"
@@ -117,10 +125,6 @@ const OnboardCard = ({
           );
         })}
       </motion.div>
-
-      {/* Fade the column into the page background at top and bottom. */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-[#0b0f12] to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#0b0f12] to-transparent" />
     </div>
   );
 };
