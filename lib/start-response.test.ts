@@ -96,6 +96,18 @@ describe("start comparability", () => {
     });
   });
 
+  it("omits profile data when no active profile is present", () => {
+    const response = buildStartResponse({
+      comparisonId: "cmp_no_profile",
+      products: ["Slack", "Notion"],
+      parsed: comparableCall1,
+      profile: null
+    });
+
+    expect("status" in response ? response.status : undefined).toBeUndefined();
+    expect(response).not.toHaveProperty("profile");
+  });
+
   it("proceeds with a carried note for comparable_with_note", () => {
     const parsed: Call1Output = {
       ...comparableCall1,

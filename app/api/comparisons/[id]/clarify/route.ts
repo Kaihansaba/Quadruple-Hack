@@ -281,7 +281,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const reasons = result.eliminated
       .map((e) => `${e.productName} failed "${e.criterionName}"`)
       .join("; ");
-    verdict = `No vendor passed ${profile.name}'s mandatory requirements. ${reasons}. Consider expanding the shortlist or re-evaluating the hard criteria.`;
+    const requirementOwner = profile?.name ? `${profile.name}'s` : "the";
+    verdict = `No vendor passed ${requirementOwner} mandatory requirements. ${reasons}. Consider expanding the shortlist or re-evaluating the hard criteria.`;
   } else {
     // Build a characteristic-level evidence table (real extracted values + where they
     // came from) so the verdict can reason about products, not scoring math.

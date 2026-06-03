@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { call2Prompt, call3Prompt, type Call1Output, type CompanyProfile } from "./prompts";
+import { call1Prompt, call2Prompt, call3Prompt, type Call1Output, type CompanyProfile } from "./prompts";
 
 const profile: CompanyProfile = {
   name: "Meridian Software",
@@ -71,6 +71,31 @@ describe("call2Prompt", () => {
     expect(call2Prompt(["Nimbus CRM"], criteria, [], profile)).toBe(
       call2Prompt(["Nimbus CRM"], criteria, [], profile, [])
     );
+  });
+
+  it("uses an empty company profile payload when no active profile exists", () => {
+    const prompt = JSON.parse(call2Prompt(["Nimbus CRM"], criteria, [], null));
+
+    expect(prompt.company_profile).toEqual({
+      name: null,
+      industry: null,
+      compliance_reqs: [],
+      tech_stack: [],
+      budget_ceiling: null,
+      default_weights: {}
+    });
+  });
+});
+
+describe("call1Prompt without a profile", () => {
+  it("instructs the model not to mark profile-derived answers", () => {
+    const prompt = JSON.parse(call1Prompt(["Nimbus CRM", "LedgerFlow"], null));
+    const instructions = prompt.instructions.join("\n");
+
+    expect(prompt.company_profile.name).toBeNull();
+    expect(prompt.company_profile.default_weights).toEqual({});
+    expect(instructions).toContain("No active buyer profile is available");
+    expect(instructions).toContain('Set "from_profile": false');
   });
 });
 

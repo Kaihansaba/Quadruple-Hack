@@ -3,14 +3,16 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { ProfileRecord } from "./page";
-
-type EditableProfile = {
-  companyName: string;
-  contactName: string;
-  organization: string;
-};
-
-const STORAGE_KEY = "verdict:profile-edits:v1";
+import {
+  editableFromProfile,
+  EMPTY_EDITABLE_PROFILE,
+  profileDisplayName,
+  readSavedProfile,
+  savedProfileFromEditable,
+  writeSavedProfile,
+  type EditableProfile,
+  type EditableWeight
+} from "@/lib/profile-storage";
 
 function value(input: unknown) {
   if (input === null || input === undefined || input === "") {
@@ -19,77 +21,10 @@ function value(input: unknown) {
   return String(input);
 }
 
-function money(input: number | null | undefined) {
-  if (input === null || input === undefined) {
-    return "—";
-  }
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0
-  }).format(input);
-}
-
 function initials(name: string) {
   const words = name.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return "P";
   return words.slice(0, 2).map((word) => word[0]?.toUpperCase()).join("");
-}
-
-function list(input: string[] | null | undefined) {
-  if (!input || input.length === 0) {
-    return <span className="text-zinc-500">—</span>;
-  }
-
-  return (
-    <div className="flex flex-wrap gap-2">
-      {input.map((item) => (
-        <span key={item} className="rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300">
-          {item}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function weights(input: Record<string, number> | null | undefined) {
-  const entries = Object.entries(input ?? {});
-  if (entries.length === 0) {
-    return <span className="text-zinc-500">—</span>;
-  }
-
-  return (
-    <div className="space-y-3">
-      {entries.map(([key, weight]) => (
-        <div key={key}>
-          <div className="mb-1 flex items-center justify-between gap-3 text-sm">
-            <span className="capitalize text-zinc-300">{key.replaceAll("_", " ")}</span>
-            <span className="font-medium text-white">{Math.round(weight * 100)}%</span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-            <div className="h-full rounded-full bg-blue-500" style={{ width: `${Math.round(weight * 100)}%` }} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function readSavedProfile(): EditableProfile | null {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as EditableProfile) : null;
-  } catch {
-    return null;
-  }
-}
-
-function buildEditable(profile: ProfileRecord): EditableProfile {
-  return {
-    companyName: profile.name ?? "",
-    contactName: profile.contact_name ?? profile.person_name ?? "",
-    organization: profile.organization ?? profile.name ?? ""
-  };
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -114,22 +49,27 @@ function EditableField({
   label,
   value,
   editing,
-  onChange
+  onChange,
+  placeholder = "—",
+  type = "text"
 }: {
   label: string;
   value: string;
   editing: boolean;
   onChange: (value: string) => void;
+  placeholder?: string;
+  type?: "text" | "number";
 }) {
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
       <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">{label}</label>
       {editing ? (
         <input
+          type={type}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-blue-500"
-          placeholder="—"
+          placeholder={placeholder}
         />
       ) : (
         <div className="text-sm text-zinc-200">{value.trim() || "—"}</div>
@@ -138,26 +78,174 @@ function EditableField({
   );
 }
 
-export function ProfileClient({ initialProfile }: { initialProfile: ProfileRecord }) {
-  const initialEditable = useMemo(() => buildEditable(initialProfile), [initialProfile]);
-  const [editing, setEditing] = useState(false);
+function updateListItem(items: string[], index: number, value: string) {
+  return items.map((item, itemIndex) => (itemIndex === index ? value : item));
+}
+
+function ListField({
+  label,
+  values,
+  editing,
+  placeholder,
+  onChange
+}: {
+  label: string;
+  values: string[];
+  editing: boolean;
+  placeholder: string;
+  onChange: (values: string[]) => void;
+}) {
+  const displayValues = values.map((item) => item.trim()).filter(Boolean);
+
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
+      <div className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">{label}</div>
+      {editing ? (
+        <div className="space-y-2">
+          {values.map((item, index) => (
+            <div key={index} className="flex gap-2">
+              <input
+                value={item}
+                onChange={(event) => onChange(updateListItem(values, index, event.target.value))}
+                className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-blue-500"
+                placeholder={placeholder}
+              />
+              <button
+                type="button"
+                onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}
+                className="rounded-lg border border-zinc-700 px-3 text-sm text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-200"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => onChange([...values, ""])}
+            className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-800"
+          >
+            Add
+          </button>
+        </div>
+      ) : displayValues.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {displayValues.map((item) => (
+            <span key={item} className="rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300">
+              {item}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <span className="text-sm text-zinc-500">—</span>
+      )}
+    </div>
+  );
+}
+
+function updateWeightRow(rows: EditableWeight[], index: number, patch: Partial<EditableWeight>) {
+  return rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row));
+}
+
+function WeightField({
+  rows,
+  editing,
+  onChange
+}: {
+  rows: EditableWeight[];
+  editing: boolean;
+  onChange: (rows: EditableWeight[]) => void;
+}) {
+  const displayRows = rows.filter((row) => row.criterion.trim());
+
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
+      <div className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Default weights</div>
+      {editing ? (
+        <div className="space-y-2">
+          {rows.map((row, index) => (
+            <div key={index} className="grid gap-2 sm:grid-cols-[1fr_7rem_auto]">
+              <input
+                value={row.criterion}
+                onChange={(event) => onChange(updateWeightRow(rows, index, { criterion: event.target.value }))}
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-blue-500"
+                placeholder="criterion_id"
+              />
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={row.percent}
+                onChange={(event) => onChange(updateWeightRow(rows, index, { percent: event.target.value }))}
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-blue-500"
+                placeholder="%"
+              />
+              <button
+                type="button"
+                onClick={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))}
+                className="rounded-lg border border-zinc-700 px-3 text-sm text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-200"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => onChange([...rows, { criterion: "", percent: "" }])}
+            className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-800"
+          >
+            Add weight
+          </button>
+        </div>
+      ) : displayRows.length > 0 ? (
+        <div className="space-y-3">
+          {displayRows.map((row) => {
+            const percent = Number(row.percent);
+            const width = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
+            return (
+              <div key={row.criterion}>
+                <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+                  <span className="capitalize text-zinc-300">{row.criterion.replaceAll("_", " ")}</span>
+                  <span className="font-medium text-white">{Number.isFinite(percent) ? Math.round(percent) : 0}%</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
+                  <div className="h-full rounded-full bg-blue-500" style={{ width: `${width}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <span className="text-sm text-zinc-500">—</span>
+      )}
+    </div>
+  );
+}
+
+export function ProfileClient({ initialProfile }: { initialProfile: ProfileRecord | null }) {
+  const initialEditable = useMemo(() => editableFromProfile(initialProfile), [initialProfile]);
+  const [editing, setEditing] = useState(initialProfile === null);
   const [profile, setProfile] = useState<EditableProfile>(initialEditable);
   const [draft, setDraft] = useState<EditableProfile>(initialEditable);
 
   useEffect(() => {
     const saved = readSavedProfile();
     if (!saved) return;
-    setProfile(saved);
-    setDraft(saved);
+    const editable = editableFromProfile(saved);
+    setProfile(editable);
+    setDraft(editable);
+    setEditing(false);
   }, []);
 
-  function updateDraft(key: keyof EditableProfile, nextValue: string) {
+  function updateDraft<K extends keyof EditableProfile>(key: K, nextValue: EditableProfile[K]) {
     setDraft((current) => ({ ...current, [key]: nextValue }));
   }
 
   function save() {
-    setProfile(draft);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    const normalized = savedProfileFromEditable(draft);
+    const editable = editableFromProfile(normalized);
+    setProfile(editable);
+    setDraft(editable);
+    writeSavedProfile(normalized);
     setEditing(false);
   }
 
@@ -166,8 +254,9 @@ export function ProfileClient({ initialProfile }: { initialProfile: ProfileRecor
     setEditing(false);
   }
 
-  const sector = initialProfile.sector ?? initialProfile.industry;
-  const displayName = profile.contactName.trim() || profile.companyName.trim() || "Profile";
+  const savedProfile = savedProfileFromEditable(profile);
+  const displayName = profileDisplayName(savedProfile);
+  const hasProfileName = displayName.length > 0;
 
   return (
     <main className="min-h-screen px-4 py-10">
@@ -180,9 +269,11 @@ export function ProfileClient({ initialProfile }: { initialProfile: ProfileRecor
               </div>
               <div>
                 <p className="mb-1 text-sm text-zinc-500">Profile</p>
-                <h1 className="text-2xl font-bold text-white">{value(displayName)}</h1>
+                <h1 className="text-2xl font-bold text-white">
+                  {hasProfileName ? value(displayName) : "Create your profile"}
+                </h1>
                 <p className="mt-1 text-sm text-zinc-400">
-                  {value(profile.companyName)} · {value(sector)}
+                  {hasProfileName ? `${value(profile.companyName)} · ${value(profile.organization || profile.industry)}` : "Add profile details to personalize comparisons."}
                 </p>
               </div>
             </div>
@@ -211,7 +302,7 @@ export function ProfileClient({ initialProfile }: { initialProfile: ProfileRecor
                   onClick={() => setEditing(true)}
                   className="rounded-xl border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-800"
                 >
-                  Edit names
+                  Edit profile
                 </button>
               )}
             </div>
@@ -223,16 +314,30 @@ export function ProfileClient({ initialProfile }: { initialProfile: ProfileRecor
             label="Company name"
             value={draft.companyName}
             editing={editing}
+            placeholder="Company name"
             onChange={(nextValue) => updateDraft("companyName", nextValue)}
           />
           <EditableField
             label="Organization / sector"
             value={draft.organization}
             editing={editing}
+            placeholder="Organization or sector"
             onChange={(nextValue) => updateDraft("organization", nextValue)}
           />
-          <Field label="Industry">{value(initialProfile.industry)}</Field>
-          <Field label="Size">{value(initialProfile.size)}</Field>
+          <EditableField
+            label="Industry"
+            value={draft.industry}
+            editing={editing}
+            placeholder="Industry"
+            onChange={(nextValue) => updateDraft("industry", nextValue)}
+          />
+          <EditableField
+            label="Size"
+            value={draft.size}
+            editing={editing}
+            placeholder="Company size"
+            onChange={(nextValue) => updateDraft("size", nextValue)}
+          />
         </Section>
 
         <Section title="People">
@@ -240,20 +345,50 @@ export function ProfileClient({ initialProfile }: { initialProfile: ProfileRecor
             label="Contact / person name"
             value={draft.contactName}
             editing={editing}
+            placeholder="Contact name"
             onChange={(nextValue) => updateDraft("contactName", nextValue)}
           />
         </Section>
 
         <Section title="Constraints">
-          <Field label="Budget ceiling">{money(initialProfile.budget_ceiling)}</Field>
-          <Field label="Compliance requirements">{list(initialProfile.compliance_reqs)}</Field>
+          <EditableField
+            label="Budget ceiling"
+            value={draft.budgetCeiling}
+            editing={editing}
+            type="number"
+            placeholder="Budget ceiling"
+            onChange={(nextValue) => updateDraft("budgetCeiling", nextValue)}
+          />
+          <ListField
+            label="Compliance requirements"
+            values={draft.complianceReqs}
+            editing={editing}
+            placeholder="Compliance requirement"
+            onChange={(nextValue) => updateDraft("complianceReqs", nextValue)}
+          />
         </Section>
 
         <Section title="Preferences">
-          <Field label="Tech stack">{list(initialProfile.tech_stack)}</Field>
-          <Field label="Preferred suppliers">{list(initialProfile.preferred_suppliers)}</Field>
+          <ListField
+            label="Tech stack"
+            values={draft.techStack}
+            editing={editing}
+            placeholder="Technology"
+            onChange={(nextValue) => updateDraft("techStack", nextValue)}
+          />
+          <ListField
+            label="Preferred suppliers"
+            values={draft.preferredSuppliers}
+            editing={editing}
+            placeholder="Supplier"
+            onChange={(nextValue) => updateDraft("preferredSuppliers", nextValue)}
+          />
           <div className="sm:col-span-2">
-            <Field label="Default weights">{weights(initialProfile.default_weights)}</Field>
+            <WeightField
+              rows={draft.defaultWeights}
+              editing={editing}
+              onChange={(nextValue) => updateDraft("defaultWeights", nextValue)}
+            />
           </div>
         </Section>
       </div>

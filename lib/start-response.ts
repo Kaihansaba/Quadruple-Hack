@@ -100,7 +100,7 @@ export function buildStartResponse({
   products: string[];
   parsed: Call1Output;
   documents?: StartDocument[];
-  profile?: CompanyProfile;
+  profile?: CompanyProfile | null;
 }): StartResult {
   const comparability = normalizeComparability(parsed.comparability, products);
 

@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { HistorySidebar } from "./history-sidebar";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  initialProfileName
+}: {
+  children: React.ReactNode;
+  initialProfileName: string | null;
+}) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [cursor, setCursor] = useState({ x: -400, y: -400 });
 
@@ -29,6 +35,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         style={{ left: cursor.x, top: cursor.y }}
       />
       <HistorySidebar
+        initialProfileName={initialProfileName}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onOpen={() => setSidebarOpen(true)}

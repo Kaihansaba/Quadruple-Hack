@@ -50,9 +50,13 @@ export default function ClarifyPage() {
     }
   }, [id, searchParams]);
 
-  // Pre-fill answers marked from_profile
+  // Pre-fill answers marked from_profile only when an active profile exists.
   useEffect(() => {
     if (!data) return;
+    if (!data.profile) {
+      setAnswers({});
+      return;
+    }
     const prefilled: Record<string, string> = {};
     for (const q of data.questions) {
       const profileAnswer = q.suggested_answers.find((a) => a.from_profile);
@@ -177,9 +181,11 @@ export default function ClarifyPage() {
               <h1 className="text-2xl font-bold text-white light:text-zinc-900">Tune the decision</h1>
               <p className="mt-1 text-sm text-zinc-500">Answer the questions below, then analyze.</p>
             </div>
-            <div className="rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs text-blue-300 light:text-blue-700">
-              Meridian Software profile applied
-            </div>
+            {data.profile && (
+              <div className="rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs text-blue-300 light:text-blue-700">
+                {data.profile.name.trim() ? `${data.profile.name} profile applied` : "Profile applied"}
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2 overflow-x-auto pb-1">
@@ -254,6 +260,7 @@ export default function ClarifyPage() {
                   selected={answers[activeQuestion.question.id]}
                   onSelect={selectAnswer}
                   products={data.products.map((p) => p.name)}
+                  hasProfile={Boolean(data.profile)}
                 />
               </motion.div>
             ) : null}
@@ -323,12 +330,14 @@ function QuestionCard({
   q,
   selected,
   onSelect,
-  products
+  products,
+  hasProfile
 }: {
   q: StartResponse["questions"][number];
   selected: string | undefined;
   onSelect: (id: string, label: string) => void;
   products: string[];
+  hasProfile: boolean;
 }) {
   const isPerProduct = q.input_type === "per_product";
   const targetProductsRaw =
@@ -415,7 +424,7 @@ function QuestionCard({
             />
           </div>
 
-          {q.suggested_answers.some((answer) => answer.from_profile) && (
+          {hasProfile && q.suggested_answers.some((answer) => answer.from_profile) && (
             <p className="mt-3 text-xs text-blue-400">Profile suggested option included.</p>
           )}
         </>

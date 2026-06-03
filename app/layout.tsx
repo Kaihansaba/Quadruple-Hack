@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: "Quantified B2B purchase decisions"
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={geist.variable} suppressHydrationWarning>
       <head>
@@ -18,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('verdict:theme');var sysLight=window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches;if(t==='light'||(t===null&&sysLight))document.documentElement.setAttribute('data-theme','light');})()` }} />
       </head>
       <body>
-        <AppShell>{children}</AppShell>
+        <AppShell initialProfileName={null}>{children}</AppShell>
       </body>
     </html>
   );

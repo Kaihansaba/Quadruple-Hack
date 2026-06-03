@@ -22,7 +22,6 @@ import { parseSessionData, readSessionData, saveSessionData } from "@/lib/sessio
 import { upsertComparisonHistory } from "@/lib/comparison-history";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { DecisionMemo, type MemoData } from "@/app/components/DecisionMemo";
-import { DEMO_PROFILE } from "@/lib/demo-profile";
 import ProductLogo from "@/components/ui/product-logo";
 import ScoreGauge from "@/components/ui/score-gauge";
 import type { DecisionEngineInput, DecisionEngineResult, Criterion } from "@/lib/engine/types";
@@ -570,7 +569,7 @@ export default function ResultsPage() {
     reweight(weights);
   }
 
-  const activeProfile = engineInputRef.current?.profile ?? DEMO_PROFILE;
+  const activeProfile = engineInputRef.current?.profile ?? null;
 
   function buildMemoData(): MemoData {
     if (!result || products.length === 0 || criteria.length === 0) {
@@ -602,7 +601,7 @@ export default function ResultsPage() {
         criterion.type === "hard"
           ? "Treated as a mandatory requirement before weighted scoring."
           : `Weighted at ${pct(criterion.weight ?? 0)}% based on the buyer's stated priorities.`,
-      fromProfile: activeProfile.default_weights[criterion.id] !== undefined
+      fromProfile: activeProfile?.default_weights[criterion.id] !== undefined
     }));
     const memoScores = result.cells
       .filter((cell) => products.some((product) => product.id === cell.productId))
@@ -653,7 +652,7 @@ export default function ResultsPage() {
 
     return {
       title: "Vendor Selection Decision Memo",
-      to: `${activeProfile.name} leadership team`,
+      to: activeProfile?.name ? `${activeProfile.name} leadership team` : "Leadership team",
       from: "Procurement evaluation team",
       date: new Date().toLocaleDateString(undefined, {
         year: "numeric",
@@ -662,7 +661,7 @@ export default function ResultsPage() {
       }),
       subject: `${products.map((product) => product.name).join(" vs ")} selection`,
       decisionStatus: "Recommended for Approval",
-      preparedBy: activeProfile.name,
+      preparedBy: activeProfile?.name ?? "Procurement evaluation team",
       totalEstimatedCost: "Pending final vendor quote",
       selectedVendorId: selectedRanking.productId,
       criteria: memoCriteria,
@@ -854,7 +853,7 @@ export default function ResultsPage() {
     ? `Strongest on ${highlights
         .map((h) => (h.raw !== null && h.raw !== "" ? `${h.name} (${h.raw})` : h.name))
         .join(" and ")}.`
-    : `${winner.productName} is the best overall fit for ${activeProfile.name}.`;
+    : `${winner.productName} is the best overall fit.`;
 
   // Assumptions window — buyer inputs + data caveats.
   const priorities = [...softCriteria]
@@ -1307,22 +1306,24 @@ export default function ResultsPage() {
                     <dd className="text-zinc-300 light:text-zinc-700">{mustHaves.join(", ")}</dd>
                   </div>
                 )}
-                {activeProfile.budget_ceiling != null && (
+                {activeProfile?.budget_ceiling != null && (
                   <div className="flex gap-3">
                     <dt className="w-28 shrink-0 text-zinc-500">Budget ceiling</dt>
                     <dd className="text-zinc-300 light:text-zinc-700">${activeProfile.budget_ceiling.toLocaleString()}</dd>
                   </div>
                 )}
-                {activeProfile.compliance_reqs.length > 0 && (
+                {activeProfile?.compliance_reqs.length ? (
                   <div className="flex gap-3">
                     <dt className="w-28 shrink-0 text-zinc-500">Compliance</dt>
                     <dd className="text-zinc-300 light:text-zinc-700">{activeProfile.compliance_reqs.join(", ")}</dd>
                   </div>
+                ) : null}
+                {activeProfile?.name && (
+                  <div className="flex gap-3">
+                    <dt className="w-28 shrink-0 text-zinc-500">Company</dt>
+                    <dd className="text-zinc-300">{activeProfile.name}</dd>
+                  </div>
                 )}
-                <div className="flex gap-3">
-                  <dt className="w-28 shrink-0 text-zinc-500">Company</dt>
-                  <dd className="text-zinc-300">{activeProfile.name}</dd>
-                </div>
               </dl>
 
               {dataCaveats.length > 0 && (

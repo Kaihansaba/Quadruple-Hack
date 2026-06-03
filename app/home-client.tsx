@@ -4,10 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { upsertComparisonHistory } from "@/lib/comparison-history";
-import type { DocumentPage, StartResponse, StartResult } from "@/lib/api-types";
+import type { DiscoverProduct, DiscoverResponse, DocumentPage, StartResponse, StartResult } from "@/lib/api-types";
 import { saveSessionData } from "@/lib/session-data";
 import { formatIncomparableMessage } from "@/lib/start-response";
 import { useColorScheme } from "@/lib/use-color-scheme";
+import {
+  PROFILE_STORAGE_EVENT,
+  profileFirstName,
+  readSavedProfile
+} from "@/lib/profile-storage";
 import BoxLoader from "@/components/ui/box-loader";
 import LightRays from "@/components/ui/light-rays";
 import ProductLogo from "@/components/ui/product-logo";
@@ -38,6 +43,7 @@ type AttachedFile = {
 };
 
 type Product = { name: string; description: string; files: AttachedFile[] };
+type HomeMode = "add_products" | "general_search";
 type ConfirmableProduct = StartResponse["products"][number] & {
   category?: string;
   detectedFrom?: "document" | "query";
@@ -52,25 +58,16 @@ type ConfirmableProduct = StartResponse["products"][number] & {
 const SUGGESTIONS = ["Salesforce", "HubSpot"];
 const MAX_PRODUCTS = 4;
 const MAX_DOCUMENT_TEXT_CHARS = 20_000;
-const PROFILE_STORAGE_KEY = "verdict:profile-edits:v1";
-
 const EMPTY_DRAFT: Product = { name: "", description: "", files: [] };
 
 function getGreeting(firstName: string | null) {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-  return firstName ? `${greeting} ${firstName}` : greeting;
+  return firstName ? `${greeting} ${firstName}` : "Hello";
 }
 
 function readProfileFirstName() {
-  try {
-    const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { contactName?: string };
-    return parsed.contactName?.trim().split(/\s+/)[0] || null;
-  } catch {
-    return null;
-  }
+  return profileFirstName(readSavedProfile());
 }
 
 function productsForConfirmation(response: StartResponse): ConfirmableProduct[] {
@@ -142,6 +139,13 @@ export function HomeClient() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [firstName, setFirstName] = useState<string | null>(null);
+  const [mode, setMode] = useState<HomeMode>("add_products");
+  const [generalQuery, setGeneralQuery] = useState("");
+  const [generalLoading, setGeneralLoading] = useState(false);
+  const [generalResults, setGeneralResults] = useState<DiscoverProduct[]>([]);
+  const [generalError, setGeneralError] = useState<string | null>(null);
+  const [generalSearched, setGeneralSearched] = useState(false);
+  const [selectedGeneralProducts, setSelectedGeneralProducts] = useState<string[]>([]);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
@@ -160,11 +164,38 @@ export function HomeClient() {
   const greeting = getGreeting(firstName);
 
   useEffect(() => {
-    setFirstName(readProfileFirstName());
+    function refreshProfileName() {
+      setFirstName(readProfileFirstName());
+    }
+
+    refreshProfileName();
+    window.addEventListener("storage", refreshProfileName);
+    window.addEventListener(PROFILE_STORAGE_EVENT, refreshProfileName);
+    return () => {
+      window.removeEventListener("storage", refreshProfileName);
+      window.removeEventListener(PROFILE_STORAGE_EVENT, refreshProfileName);
+    };
   }, []);
 
-  async function submit(forceCompare = false) {
-    if (!canCompare) return;
+  function selectMode(nextMode: HomeMode) {
+    setMode(nextMode);
+    setError(null);
+    setGeneralLoading(false);
+    setGeneralQuery("");
+    setGeneralResults([]);
+    setGeneralError(null);
+    setGeneralSearched(false);
+    setSelectedGeneralProducts([]);
+  }
+
+  async function submitProducts(productsToCompare: Product[], forceCompare = false) {
+    const hasNamedProducts = productsToCompare.filter((product) => product.name.trim()).length >= 2;
+    const hasDocuments = productsToCompare.filter((product) =>
+      product.files.some((file) => file.text?.trim())
+    ).length >= 2;
+    if (!hasNamedProducts && !hasDocuments) return;
+
+    setProducts(productsToCompare);
     setLoading(true);
     setError(null);
     if (forceCompare) {
@@ -172,15 +203,16 @@ export function HomeClient() {
     }
 
     try {
-      const documents = productDocuments(products);
-      const query = products
+      const documents = productDocuments(productsToCompare);
+      const query = productsToCompare
         .map((product) => product.name.trim())
         .filter(Boolean)
         .join(" vs ");
+      const savedProfile = readSavedProfile();
       const body =
         documents.length > 0
-          ? { ...(query ? { query } : {}), documents, forceCompare }
-          : { query, forceCompare };
+          ? { ...(query ? { query } : {}), documents, forceCompare, ...(savedProfile ? { profile: savedProfile } : {}) }
+          : { query, forceCompare, ...(savedProfile ? { profile: savedProfile } : {}) };
 
       const res = await fetch("/api/comparisons/start", {
         method: "POST",
@@ -202,6 +234,11 @@ export function HomeClient() {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setLoading(false);
     }
+  }
+
+  async function submit(forceCompare = false) {
+    if (!canCompare) return;
+    await submitProducts(products, forceCompare);
   }
 
   function addProduct() {
@@ -377,6 +414,69 @@ export function HomeClient() {
     window.setTimeout(() => nameInputRef.current?.focus(), 0);
   }
 
+  async function submitGeneralSearch(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!generalQuery.trim() || generalLoading) return;
+
+    setGeneralLoading(true);
+    setGeneralResults([]);
+    setGeneralError(null);
+    setGeneralSearched(true);
+    setSelectedGeneralProducts([]);
+
+    try {
+      const savedProfile = readSavedProfile();
+      const res = await fetch("/api/search/discover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          need: generalQuery.trim(),
+          ...(savedProfile ? { profile: savedProfile } : {})
+        })
+      });
+      const data = (await res.json()) as DiscoverResponse;
+      if (!res.ok) {
+        throw new Error(data.error || "Search failed.");
+      }
+      setGeneralResults(data.products);
+      setSelectedGeneralProducts(data.products.map((result) => result.name));
+      if (data.products.length === 0) {
+        setGeneralError("No clear matches yet. Try describing it differently.");
+      }
+    } catch (err) {
+      setGeneralError(
+        err instanceof Error
+          ? err.message
+          : "No clear matches yet. Try describing it differently."
+      );
+      setGeneralResults([]);
+    } finally {
+      setGeneralLoading(false);
+    }
+  }
+
+  function toggleGeneralProduct(productName: string) {
+    setSelectedGeneralProducts((current) => {
+      const isSelected = current.includes(productName);
+      if (isSelected) {
+        if (current.length <= 2) return current;
+        return current.filter((name) => name !== productName);
+      }
+
+      return [...current, productName];
+    });
+  }
+
+  function compareGeneralProducts() {
+    if (selectedGeneralProducts.length < 2 || loading) return;
+    const selectedProducts = selectedGeneralProducts.map((name) => ({
+      name,
+      description: "",
+      files: []
+    }));
+    void submitProducts(selectedProducts);
+  }
+
   return (
     <main className="relative min-h-screen px-4 pb-32 pt-12">
       <AnimatePresence>{loading && <GeneratingOverlay products={products} />}</AnimatePresence>
@@ -431,6 +531,8 @@ export function HomeClient() {
       ) : (
         <>
       <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center">
+        <ModeToggle mode={mode} onChange={selectMode} />
+
         <AnimatedText
           text={greeting}
           textClassName="text-lg font-semibold text-blue-300 light:text-blue-700"
@@ -455,6 +557,8 @@ export function HomeClient() {
           What are you deciding today?
         </h1>
 
+        {mode === "add_products" ? (
+          <>
         <div ref={cardsRef} className={`mb-6 w-full ${formOpen ? "overflow-x-auto pb-2" : ""}`}>
           <div className={
             showInitialAdd
@@ -612,9 +716,26 @@ export function HomeClient() {
           </div>
         )}
         </AnimatePresence>
+          </>
+        ) : (
+          <GeneralSearchPanel
+            query={generalQuery}
+            loading={generalLoading}
+            results={generalResults}
+            error={generalError}
+            searched={generalSearched}
+            selectedProductNames={selectedGeneralProducts}
+            comparing={loading}
+            onQueryChange={setGeneralQuery}
+            onSubmit={submitGeneralSearch}
+            onToggleProduct={toggleGeneralProduct}
+            onCompare={compareGeneralProducts}
+          />
+        )}
 
       </div>
 
+      {mode === "add_products" && (
       <div className="app-bottom-bar fixed bottom-4 left-0 right-0 z-10 px-4 py-4 transition-[left] duration-300 sm:bottom-6">
         <div className="mx-auto max-w-3xl space-y-2">
           <motion.button
@@ -642,9 +763,193 @@ export function HomeClient() {
           {error && <p className="text-center text-sm text-red-400">{error}</p>}
         </div>
       </div>
+      )}
         </>
       )}
     </main>
+  );
+}
+
+function ModeToggle({
+  mode,
+  onChange
+}: {
+  mode: HomeMode;
+  onChange: (mode: HomeMode) => void;
+}) {
+  return (
+    <div className="mb-7 inline-flex rounded-2xl border border-white/10 light:border-zinc-200 bg-zinc-950/70 light:bg-white/80 p-1 shadow-[0_8px_30px_rgba(0,0,0,0.22)] light:shadow-sm backdrop-blur-xl">
+      {[
+        { id: "add_products" as const, label: "Add Products" },
+        { id: "general_search" as const, label: "General Search" }
+      ].map((item) => {
+        const active = mode === item.id;
+        return (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onChange(item.id)}
+            className={`rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
+              active
+                ? "bg-blue-500 text-white shadow-[0_6px_20px_rgba(45,113,191,0.28)]"
+                : "text-zinc-400 light:text-zinc-600 hover:text-zinc-100 light:hover:text-zinc-900"
+            }`}
+            aria-pressed={active}
+          >
+            {item.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function GeneralSearchPanel({
+  query,
+  loading,
+  results,
+  error,
+  searched,
+  selectedProductNames,
+  comparing,
+  onQueryChange,
+  onSubmit,
+  onToggleProduct,
+  onCompare
+}: {
+  query: string;
+  loading: boolean;
+  results: DiscoverProduct[];
+  error: string | null;
+  searched: boolean;
+  selectedProductNames: string[];
+  comparing: boolean;
+  onQueryChange: (query: string) => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  onToggleProduct: (productName: string) => void;
+  onCompare: () => void;
+}) {
+  const selectedCount = selectedProductNames.length;
+  const canCompareSelected = selectedCount >= 2 && !comparing;
+
+  return (
+    <div className="w-full">
+      <form
+        onSubmit={onSubmit}
+        className="rounded-2xl border border-white/10 light:border-zinc-200 bg-white/[0.04] light:bg-white p-5 shadow-[0_8px_40px_rgba(0,0,0,0.4)] light:shadow-sm backdrop-blur-xl"
+      >
+        <label htmlFor="general-search" className="mb-2 block text-xs font-medium uppercase tracking-wide text-zinc-500">
+          General Search
+        </label>
+        <textarea
+          id="general-search"
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+          rows={5}
+          disabled={loading}
+          placeholder={"Describe exactly what you need… (e.g. 'a CRM for a 40-person non-technical sales team, budget-conscious, must integrate with Slack')"}
+          className="w-full resize-none bg-transparent text-base leading-7 text-white light:text-zinc-900 outline-none placeholder:text-zinc-500"
+        />
+        <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 light:border-zinc-200 pt-4">
+          <p className="text-xs text-zinc-500">Uses web search to find real products with sources.</p>
+          <button
+            type="submit"
+            disabled={!query.trim() || loading}
+            className="relative rounded-xl bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                Searching
+              </span>
+            ) : (
+              "Search"
+            )}
+          </button>
+        </div>
+      </form>
+
+      {loading && (
+        <div className="mt-5 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4 text-sm text-blue-200 light:text-blue-700">
+          Searching the web for credible product matches.
+        </div>
+      )}
+
+      {!loading && error && (
+        <div className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200 light:text-amber-700">
+          {error}
+        </div>
+      )}
+
+      {!loading && searched && !error && results.length === 0 && (
+        <div className="mt-5 rounded-2xl border border-zinc-800 light:border-zinc-200 bg-zinc-950/70 light:bg-white/90 p-4 text-sm text-zinc-400 light:text-zinc-600">
+          No clear matches yet. Try describing it differently.
+        </div>
+      )}
+
+      {results.length > 0 && (
+        <section className="mt-5 rounded-2xl border border-white/10 light:border-zinc-200 bg-zinc-950/70 light:bg-white/90 p-5 shadow-[0_8px_40px_rgba(0,0,0,0.28)] light:shadow-sm backdrop-blur-xl">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <h2 className="text-sm font-semibold text-white light:text-zinc-900">Product matches</h2>
+            <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-xs text-blue-300 light:text-blue-700">
+              Web-sourced
+            </span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {results.map((result) => (
+              <label
+                key={result.name}
+                className={`block rounded-xl border p-4 transition-colors ${
+                  selectedProductNames.includes(result.name)
+                    ? "border-blue-500/50 bg-blue-500/10 light:bg-blue-50"
+                    : "border-zinc-800 light:border-zinc-200 bg-zinc-900/80 light:bg-zinc-50"
+                }`}
+              >
+                <div className="mb-2 flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedProductNames.includes(result.name)}
+                    onChange={() => onToggleProduct(result.name)}
+                    disabled={selectedProductNames.includes(result.name) && selectedCount <= 2}
+                    className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-900 text-blue-500 accent-blue-500"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <ProductLogo name={result.name} size={28} />
+                      <h3 className="truncate text-sm font-semibold text-zinc-100 light:text-zinc-900">{result.name}</h3>
+                    </div>
+                    <p className="mt-1 text-xs text-zinc-500">{result.category} · {Math.round(result.confidence * 100)}% confidence</p>
+                    <p className="mt-2 text-sm leading-6 text-zinc-400 light:text-zinc-600">{result.reason}</p>
+                    <a
+                      href={result.source_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-3 inline-block max-w-full truncate text-xs text-blue-300 light:text-blue-700 hover:text-blue-200 light:hover:text-blue-600"
+                    >
+                      {result.source_url}
+                    </a>
+                  </div>
+                </div>
+              </label>
+            ))}
+          </div>
+
+          <div className="mt-5 flex flex-col gap-3 border-t border-zinc-800 light:border-zinc-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-zinc-500">
+              {selectedCount < 2 ? "Select at least 2 products to compare." : "Keep at least 2 selected to compare."}
+            </p>
+            <button
+              type="button"
+              onClick={onCompare}
+              disabled={!canCompareSelected}
+              className="rounded-xl bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {comparing ? "Starting comparison..." : `Compare these (${selectedCount})`}
+            </button>
+          </div>
+        </section>
+      )}
+    </div>
   );
 }
 

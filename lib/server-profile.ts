@@ -30,9 +30,17 @@ export function isCompanyProfile(value: unknown): value is CompanyProfile {
   );
 }
 
-export async function loadCompanyProfile(candidate?: unknown): Promise<CompanyProfile> {
+export async function loadCompanyProfile(candidate?: unknown): Promise<CompanyProfile | null> {
+  if (candidate === null) {
+    return null;
+  }
+
   if (isCompanyProfile(candidate)) {
     return candidate;
+  }
+
+  if (process.env.VERDICT_NO_ACTIVE_PROFILE === "true") {
+    return null;
   }
 
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
@@ -42,7 +50,7 @@ export async function loadCompanyProfile(candidate?: unknown): Promise<CompanyPr
   try {
     const { getCompanyProfile } = await import("./supabase");
     const profile = await getCompanyProfile();
-    return isCompanyProfile(profile) ? profile : DEMO_PROFILE;
+    return isCompanyProfile(profile) ? profile : null;
   } catch {
     return DEMO_PROFILE;
   }

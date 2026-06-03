@@ -8,23 +8,29 @@ import {
   readComparisonHistory,
   type ComparisonHistoryItem
 } from "@/lib/comparison-history";
+import {
+  PROFILE_STORAGE_EVENT,
+  profileDisplayName,
+  readSavedProfile
+} from "@/lib/profile-storage";
 import { ThemeToggle } from "./theme-toggle";
-import { DEMO_PROFILE } from "@/lib/demo-profile";
 
-const PROFILE_STORAGE_KEY = "verdict:profile-edits:v1";
+const EMPTY_PROFILE_LABEL = "Create your profile";
 
 export function HistorySidebar({
+  initialProfileName,
   isOpen,
   onClose,
   onOpen
 }: {
+  initialProfileName: string | null;
   isOpen: boolean;
   onClose: () => void;
   onOpen: () => void;
 }) {
   const [items, setItems] = useState<ComparisonHistoryItem[]>([]);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [profileName, setProfileName] = useState(DEMO_PROFILE.name);
+  const [profileName, setProfileName] = useState(initialProfileName ?? EMPTY_PROFILE_LABEL);
 
   useEffect(() => {
     function refresh() {
@@ -43,21 +49,18 @@ export function HistorySidebar({
 
   useEffect(() => {
     function loadProfileName() {
-      try {
-        const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
-        if (!raw) return;
-        const parsed = JSON.parse(raw) as { contactName?: string; companyName?: string };
-        const nextName = parsed.contactName?.trim() || parsed.companyName?.trim();
-        if (nextName) setProfileName(nextName);
-      } catch {
-        // keep fallback
-      }
+      const nextName = profileDisplayName(readSavedProfile());
+      setProfileName(nextName || initialProfileName || EMPTY_PROFILE_LABEL);
     }
 
     loadProfileName();
     window.addEventListener("storage", loadProfileName);
-    return () => window.removeEventListener("storage", loadProfileName);
-  }, []);
+    window.addEventListener(PROFILE_STORAGE_EVENT, loadProfileName);
+    return () => {
+      window.removeEventListener("storage", loadProfileName);
+      window.removeEventListener(PROFILE_STORAGE_EVENT, loadProfileName);
+    };
+  }, [initialProfileName]);
 
   return (
     <>
@@ -131,7 +134,7 @@ export function HistorySidebar({
                 <Avatar name={profileName} />
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium text-white light:text-zinc-900">{profileName}</div>
-                  <div className="text-xs text-zinc-500">Profile</div>
+                  <div className="text-xs text-zinc-500">{profileName === EMPTY_PROFILE_LABEL ? "Not set" : "Profile"}</div>
                 </div>
               </div>
               <div className="h-px bg-zinc-800 light:bg-zinc-200" />
@@ -168,7 +171,7 @@ export function HistorySidebar({
             <Avatar name={profileName} />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-zinc-100 light:text-zinc-800">{profileName}</div>
-              <div className="text-xs text-zinc-500">Profile</div>
+              <div className="text-xs text-zinc-500">{profileName === EMPTY_PROFILE_LABEL ? "Not set" : "Profile"}</div>
             </div>
             <span className="text-lg text-zinc-500">›</span>
           </button>

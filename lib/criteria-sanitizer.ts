@@ -9,9 +9,9 @@ function mentionsCompliance(text: string): boolean {
 
 export function sanitizeCall1OutputForProfile(
   output: Call1Output,
-  profile: CompanyProfile
+  profile: CompanyProfile | null
 ): Call1Output {
-  const hasComplianceRequirements = profile.compliance_reqs.length > 0;
+  const hasComplianceRequirements = (profile?.compliance_reqs.length ?? 0) > 0;
 
   const criteria = output.criteria
     .filter((criterion) => hasComplianceRequirements || !mentionsCompliance(`${criterion.id} ${criterion.name}`))
@@ -36,14 +36,26 @@ export function sanitizeCall1OutputForProfile(
     };
   });
 
-  const questions = output.questions.filter((question) => {
-    if (hasComplianceRequirements) {
-      return true;
-    }
+  const questions = output.questions
+    .filter((question) => {
+      if (hasComplianceRequirements) {
+        return true;
+      }
 
-    const labels = question.suggested_answers.map((answer) => answer.label).join(" ");
-    return question.category !== "dealbreakers" && !mentionsCompliance(`${question.question} ${labels}`);
-  });
+      const labels = question.suggested_answers.map((answer) => answer.label).join(" ");
+      return question.category !== "dealbreakers" && !mentionsCompliance(`${question.question} ${labels}`);
+    })
+    .map((question) =>
+      profile
+        ? question
+        : {
+            ...question,
+            suggested_answers: question.suggested_answers.map((answer) => ({
+              ...answer,
+              from_profile: false
+            }))
+          }
+    );
 
   return {
     detected_products: output.detected_products,

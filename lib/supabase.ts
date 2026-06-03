@@ -10,7 +10,7 @@ export async function getCompanyProfile() {
     .from("company_profile")
     .select("*")
     .limit(1)
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 }
